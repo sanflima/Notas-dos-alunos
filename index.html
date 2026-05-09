@@ -43,6 +43,7 @@ const TURMAS_REAIS = [
     cor: "blue",
     icone: "LCC",
     nivel: "Graduação",
+    imagem: "assets/lcc1.jpg",
   },
   {
     id: "adm1",
@@ -59,6 +60,7 @@ const TURMAS_REAIS = [
     cor: "turquoise",
     icone: "ADM",
     nivel: "Graduação",
+    imagem: "assets/adm1.jpg",
   },
   {
     id: "agroA",
@@ -75,6 +77,7 @@ const TURMAS_REAIS = [
     cor: "green",
     icone: "1A",
     nivel: "Médio",
+    imagem: "assets/agroA.jpg",
   },
   {
     id: "agroB",
@@ -91,6 +94,7 @@ const TURMAS_REAIS = [
     cor: "amber",
     icone: "1B",
     nivel: "Médio",
+    imagem: "assets/agroB.jpg",
   },
   {
     id: "agroC",
@@ -107,6 +111,7 @@ const TURMAS_REAIS = [
     cor: "purple",
     icone: "1C",
     nivel: "Médio",
+    imagem: "assets/agroC.jpg",
   },
   {
     id: "agroD",
@@ -123,6 +128,7 @@ const TURMAS_REAIS = [
     cor: "coral",
     icone: "1D",
     nivel: "Médio",
+    imagem: "assets/agroD.jpg",
   },
 ];
 
@@ -853,8 +859,13 @@ function HomeTurmas({ pal, turmas, alunosPorTurma, onOpen, onNovaTurma }) {
               onMouseLeave={e => { e.currentTarget.style.transform = "";
                 e.currentTarget.style.boxShadow = `0 4px 18px ${cc.ink}22, 0 1px 4px rgba(15,23,42,0.06)`; }}
             >
-              <div style={{ height: 200, background: cc.bg, padding: 20,
-                display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+              <div style={{
+                height: 200, padding: 20,
+                display: "flex", alignItems: "flex-start", justifyContent: "space-between",
+                background: t.imagem
+                  ? `linear-gradient(${cc.bg}BB, ${cc.bg}BB), url('${t.imagem}') center/cover no-repeat`
+                  : cc.bg,
+              }}>
                 <div style={{ width: 60, height: 60, borderRadius: 14, background: "white",
                   display: "grid", placeItems: "center", fontWeight: 800, fontSize: 17,
                   color: cc.ink, boxShadow: "0 3px 10px rgba(0,0,0,0.10)" }}>{t.icone}</div>
