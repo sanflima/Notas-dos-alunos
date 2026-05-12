@@ -15,7 +15,7 @@
       border-left: 4px solid #14B8B0; display: flex; justify-content: space-between; align-items: center; }
     .turma b { color: #0E8E88; display: block; margin-bottom: 2px; }
     .turma span { font-size: 12px; color: #64748b; }
-    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 8px; }
     button { background: #14B8B0; color: white; border: none; padding: 13px 20px; border-radius: 10px;
       font-size: 14px; font-weight: 700; cursor: pointer; }
     button.all { grid-column: span 2; background: #0E8E88; font-size: 15px; padding: 15px; }
@@ -42,13 +42,17 @@
     <div><b>Turma 1A — Matemática I</b><span>31 alunos · P1: Simulado (20 pts)</span></div>
   </div>
   <div class="turma">
-    <div><b>Turma 1D — Matemática I</b><span>27 alunos · P1: Teste-Fra (10) + Teste-Com (20) + Atividade (10) + Teste-Fun (10)</span></div>
+    <div><b>Turma 1D — Matemática I</b><span>27 alunos · P1: Teste-Fra(10) + Teste-Com(20) + Atividade(10) + Teste-Fun(10)</span></div>
+  </div>
+  <div class="turma">
+    <div><b>Turma LCC — Matemática Aplicada</b><span>10 alunos · P1: Teste 01(20) + Limites(20) + Derivadas(10) · P2: Der.Prova(20) + Códigos(20) + Caderno(10)</span></div>
   </div>
 
   <div class="btn-row">
-    <button onclick="inserirTurma('1A')">▶ Inserir Turma 1A</button>
-    <button onclick="inserirTurma('1D')">▶ Inserir Turma 1D</button>
-    <button class="all" onclick="inserirTudo()">▶▶ Inserir TODAS as turmas acima</button>
+    <button onclick="inserirTurma('1A')">▶ Inserir 1A</button>
+    <button onclick="inserirTurma('1D')">▶ Inserir 1D</button>
+    <button onclick="inserirTurma('LCC')">▶ Inserir LCC</button>
+    <button class="all" style="grid-column:span 3" onclick="inserirTudo()">▶▶ Inserir TODAS as turmas acima</button>
   </div>
   <div id="log"></div>
 </div>
@@ -89,6 +93,40 @@ const NOTAS_1A = {
   "agroA_a28": 5,   // Thaillan Santos da Silva
   "agroA_a29": 5,   // Victória dos Santos Ferreira
   "agroA_a30": 5,   // Xavier Silva Ferreira
+};
+
+// ============================================================
+//  TURMA LCC — P1 completo + P2 completo
+//  P1: Teste 01(20) | Limites(20) | Derivadas(10)
+//  P2: Derivadas Prova(20) | Códigos(20) | Caderno(10)
+// ============================================================
+const NOTAS_LCC = {
+  "lcc1_a0": { p1:[20, 8,10], p2:[14,20, 9] }, // Alisson Valerio da Silva
+  "lcc1_a1": { p1:[20,12,10], p2:[17,20, 8] }, // Fillipe Carneiro Silva
+  "lcc1_a2": { p1:[20, 6,10], p2:[ 8,20, 6] }, // Itamar Lucas Cerqueira Santos
+  "lcc1_a3": { p1:[20, 9,10], p2:[16,20, 8] }, // Jeickson Ruan da Silva Correia
+  "lcc1_a4": { p1:[20,14,10], p2:[16,20,10] }, // Joneffe de Jesus Silva
+  "lcc1_a5": { p1:[20,12,10], p2:[18,20, 9] }, // Kauan da Cruz Conceição Oliveira
+  "lcc1_a6": { p1:[20,16,10], p2:[13,20, 7] }, // Luiz Gustavo da Silva Araújo
+  "lcc1_a7": { p1:[20,11,10], p2:[16,20, 9] }, // Luiz Henrique Jesus da Silva
+  "lcc1_a8": { p1:[20,16,10], p2:[16,20,10] }, // Ramís Kelvin Silva de Souza
+  "lcc1_a9": { p1:[20,14,10], p2:[13,20,10] }, // Roberto de Souza Freitas
+};
+
+const CFG_LCC = {
+  pontosAprovacao: 60,
+  estrutura: {
+    p1: [
+      { nome: "Teste 01",  peso: 20 },
+      { nome: "Limites",   peso: 20 },
+      { nome: "Derivadas", peso: 10 },
+    ],
+    p2: [
+      { nome: "Der. Prova", peso: 20 },
+      { nome: "Códigos",    peso: 20 },
+      { nome: "Caderno",    peso: 10 },
+    ],
+  },
 };
 
 // ============================================================
@@ -164,11 +202,18 @@ function disableButtons(state) {
   document.querySelectorAll('button').forEach(b => b.disabled = state);
 }
 
+const TURMA_META = {
+  '1A':  { notas: () => NOTAS_1A,  nCols: 3, cfg: null,    turmaId: null },
+  '1D':  { notas: () => NOTAS_1D,  nCols: 4, cfg: 'agroD', turmaId: 'agroD' },
+  'LCC': { notas: () => NOTAS_LCC, nCols: 3, cfg: 'lcc1',  turmaId: 'lcc1'  },
+};
+
 async function inserirTurma(turma) {
   disableButtons(true);
   log(`\n── Turma ${turma} ──────────────────────`, 'sep');
   try {
-    const db = getDB();
+    const db   = getDB();
+    const meta = TURMA_META[turma];
     const snap = await db.collection('notas2026').doc('alunos').get();
     if (!snap.exists || !snap.data().lista?.length) {
       log('⚠️  Banco vazio. Abra o app principal, aguarde "✓ Salvo na nuvem" e tente novamente.', 'warn');
@@ -177,19 +222,24 @@ async function inserirTurma(turma) {
 
     let lista = snap.data().lista;
     log(`📥 ${lista.length} alunos no banco.`, 'info');
-
-    const notas   = turma === '1A' ? NOTAS_1A : NOTAS_1D;
-    const nCols   = turma === '1A' ? 3 : 4;
+    const notas = meta.notas();
     let count = 0;
 
     lista = lista.map(aluno => {
       const val = notas[aluno.id];
       if (val === undefined) return aluno;
-      const p1 = Array(nCols).fill(0);
-      p1[0] = val;
       count++;
-      log(`  ${aluno.nome}: p1[0] = ${val}`, 'info');
-      return { ...aluno, notas: { ...aluno.notas, p1 } };
+      if (typeof val === 'number') {
+        // Apenas p1[0] — formato simples (1A, 1D)
+        const p1 = Array(meta.nCols).fill(0);
+        p1[0] = val;
+        log(`  ${aluno.nome}: p1[0] = ${val}`, 'info');
+        return { ...aluno, notas: { ...aluno.notas, p1 } };
+      } else {
+        // P1 + P2 completos — formato objeto (LCC)
+        log(`  ${aluno.nome}: p1=${JSON.stringify(val.p1)} p2=${JSON.stringify(val.p2)}`, 'info');
+        return { ...aluno, notas: { p1: val.p1, p2: val.p2, paralela: aluno.notas?.paralela || 0 } };
+      }
     });
 
     if (!count) { log('⚠️  Nenhum aluno encontrado para essa turma.', 'warn'); disableButtons(false); return; }
@@ -198,13 +248,14 @@ async function inserirTurma(turma) {
     await db.collection('notas2026').doc('alunos').set({ lista });
     log(`✅ ${count} notas da Turma ${turma} inseridas!`, 'ok');
 
-    // Atualiza cfg da 1D
-    if (turma === '1D') {
+    // Atualiza cfg se necessário (1D e LCC têm estrutura diferente)
+    if (meta.cfg) {
+      const cfgMap = { agroD: CFG_1D, lcc1: CFG_LCC };
       const cfgSnap = await db.collection('notas2026').doc('cfg').get();
       const dados = cfgSnap.exists ? cfgSnap.data().dados : {};
-      dados['agroD'] = CFG_1D;
+      dados[meta.cfg] = cfgMap[meta.cfg];
       await db.collection('notas2026').doc('cfg').set({ dados });
-      log('✅ Configuração de avaliação da 1D atualizada (4 colunas P1).', 'ok');
+      log(`✅ Configuração de avaliação da Turma ${turma} atualizada.`, 'ok');
     }
   } catch(e) { log('❌ Erro: ' + e.message, 'err'); }
   disableButtons(false);
@@ -213,7 +264,8 @@ async function inserirTurma(turma) {
 async function inserirTudo() {
   await inserirTurma('1A');
   await inserirTurma('1D');
-  log('\n🎉 Concluído! Abra o app e confira as turmas 1A e 1D.', 'ok');
+  await inserirTurma('LCC');
+  log('\n🎉 Concluído! Abra o app e confira as turmas 1A, 1D e LCC.', 'ok');
 }
 </script>
 </body>
