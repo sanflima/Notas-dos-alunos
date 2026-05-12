@@ -7,23 +7,27 @@
   <style>
     * { box-sizing: border-box; }
     body { font-family: 'Segoe UI', sans-serif; background: #f0faf9; margin: 0; padding: 32px 20px; }
-    .card { background: white; padding: 32px; border-radius: 16px; max-width: 680px; margin: 0 auto;
+    .card { background: white; padding: 32px; border-radius: 16px; max-width: 720px; margin: 0 auto;
       box-shadow: 0 4px 24px rgba(0,0,0,.08); }
     h2 { color: #0E8E88; margin: 0 0 8px; }
     p  { color: #64748b; margin: 0 0 20px; }
-    .turma { background: #f0faf9; border-radius: 10px; padding: 14px 18px; margin-bottom: 12px;
-      border-left: 4px solid #14B8B0; }
-    .turma b { color: #0E8E88; }
-    button { background: #14B8B0; color: white; border: none; padding: 14px 32px; border-radius: 10px;
-      font-size: 15px; font-weight: 700; cursor: pointer; width: 100%; margin-top: 8px; }
+    .turma { background: #f0faf9; border-radius: 10px; padding: 12px 16px; margin-bottom: 10px;
+      border-left: 4px solid #14B8B0; display: flex; justify-content: space-between; align-items: center; }
+    .turma b { color: #0E8E88; display: block; margin-bottom: 2px; }
+    .turma span { font-size: 12px; color: #64748b; }
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+    button { background: #14B8B0; color: white; border: none; padding: 13px 20px; border-radius: 10px;
+      font-size: 14px; font-weight: 700; cursor: pointer; }
+    button.all { grid-column: span 2; background: #0E8E88; font-size: 15px; padding: 15px; }
     button:disabled { background: #94a3b8; cursor: not-allowed; }
     #log { margin-top: 20px; font-family: 'Consolas', monospace; font-size: 13px;
       background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 10px;
-      max-height: 360px; overflow-y: auto; display: none; line-height: 1.7; }
+      max-height: 400px; overflow-y: auto; display: none; line-height: 1.7; }
     .ok   { color: #34d399; }
     .info { color: #93c5fd; }
     .err  { color: #f87171; }
     .warn { color: #fbbf24; }
+    .sep  { color: #475569; }
   </style>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
@@ -31,57 +35,115 @@
 </head>
 <body>
 <div class="card">
-  <h2>📥 Inserir Notas — P1 Simulado</h2>
-  <p>Clique no botão para inserir automaticamente as notas do Simulado P1 da Turma 1A no banco de dados Firebase.</p>
+  <h2>📥 Inserir Notas — P1 · IF Baiano 2026/1</h2>
+  <p>Insere automaticamente as notas do P1 das turmas no Firebase. Abra o app principal primeiro para inicializar o banco.</p>
 
   <div class="turma">
-    <b>Turma 1A — Matemática I (Agropecuária)</b><br>
-    <span style="font-size:13px;color:#64748b">31 alunos · P1 Simulado (máx 20 pts)</span>
+    <div><b>Turma 1A — Matemática I</b><span>31 alunos · P1: Simulado (20 pts)</span></div>
+  </div>
+  <div class="turma">
+    <div><b>Turma 1D — Matemática I</b><span>27 alunos · P1: Teste-Fra (10) + Teste-Com (20) + Atividade (10) + Teste-Fun (10)</span></div>
   </div>
 
-  <button id="btn" onclick="inserir()">▶ Inserir notas da Turma 1A</button>
+  <div class="btn-row">
+    <button onclick="inserirTurma('1A')">▶ Inserir Turma 1A</button>
+    <button onclick="inserirTurma('1D')">▶ Inserir Turma 1D</button>
+    <button class="all" onclick="inserirTudo()">▶▶ Inserir TODAS as turmas acima</button>
+  </div>
   <div id="log"></div>
 </div>
 
 <script>
 // ============================================================
-//  Notas P1 — Simulado (índice 0 do array p1)
-//  Turma: agroA   IDs gerados como: agroA_a{índice}
+//  TURMA 1A — P1 Simulado (p1[0], máx 20)
 // ============================================================
-const NOTAS_P1_SIMULADO = {
-  "agroA_a0":  8,    // Alyndelon José Freire Lima
-  "agroA_a1":  7,    // Ana Clara Souza Ribeiro
-  "agroA_a2":  1,    // Angelica Pietra Almeida dos Santos
-  "agroA_a3":  0,    // Beatriz Vitoria das Neves da Silva
-  "agroA_a4":  6,    // Clarissa Felix Sousa Ribeiro
-  "agroA_a5":  2,    // Dafni dos Santos Silva
-  "agroA_a6":  2,    // Everton da Silva Souza
-  "agroA_a7":  7,    // Gabrielly Leite Souza
-  "agroA_a8":  8,    // Gemilly da Silva Jesus
-  "agroA_a9":  6,    // Grazyela de Oliveira Souza
-  "agroA_a10": 4,    // Heitor Araujo da Silva Bispo
-  "agroA_a11": 2,    // Isaac Gomes da Silva
-  "agroA_a12": 5,    // Isaac Nilton da Silva Souza
-  "agroA_a13": 4,    // Jenifer Raicca da Silva Miranda
-  "agroA_a14": 7,    // Joseane Fernandes da Silva
-  "agroA_a15": 4,    // José Augusto dos Santos Lira
-  "agroA_a16": 9,    // Kaio Santos da Silva
-  "agroA_a17": 8,    // Kaua Narcizo Silva de Souza
-  "agroA_a18": 4,    // Ketely Mayara Ferreira dos Santos
-  "agroA_a19": 9,    // Lucas Fernandes Barros dos Santos
-  "agroA_a20": 9,    // Maria Eduarda da Silva Alves
-  "agroA_a21": 1,    // Marina Jesus de Souza
-  "agroA_a22": 5,    // Micaella dos Santos Lima
-  "agroA_a23": 0,    // Nattally Vitória Silva Batista
-  "agroA_a24": 12,   // Pedro Henrique Gomes Lopes
-  "agroA_a25": 2,    // Pyetro Miranda Militão Ferreira
-  "agroA_a26": 7,    // Ruann Carlos Monteiro Andrade
-  "agroA_a27": 5,    // Silvia Roberta Silva de Santana
-  "agroA_a28": 5,    // Thaillan Santos da Silva
-  "agroA_a29": 5,    // Victória dos Santos Ferreira
-  "agroA_a30": 5,    // Xavier Silva Ferreira
+const NOTAS_1A = {
+  "agroA_a0":  8,   // Alyndelon José Freire Lima
+  "agroA_a1":  7,   // Ana Clara Souza Ribeiro
+  "agroA_a2":  1,   // Angelica Pietra Almeida dos Santos
+  "agroA_a3":  0,   // Beatriz Vitoria das Neves da Silva
+  "agroA_a4":  6,   // Clarissa Felix Sousa Ribeiro
+  "agroA_a5":  2,   // Dafni dos Santos Silva
+  "agroA_a6":  2,   // Everton da Silva Souza
+  "agroA_a7":  7,   // Gabrielly Leite Souza
+  "agroA_a8":  8,   // Gemilly da Silva Jesus
+  "agroA_a9":  6,   // Grazyela de Oliveira Souza
+  "agroA_a10": 4,   // Heitor Araujo da Silva Bispo
+  "agroA_a11": 2,   // Isaac Gomes da Silva
+  "agroA_a12": 5,   // Isaac Nilton da Silva Souza
+  "agroA_a13": 4,   // Jenifer Raicca da Silva Miranda
+  "agroA_a14": 7,   // Joseane Fernandes da Silva
+  "agroA_a15": 4,   // José Augusto dos Santos Lira
+  "agroA_a16": 9,   // Kaio Santos da Silva
+  "agroA_a17": 8,   // Kaua Narcizo Silva de Souza
+  "agroA_a18": 4,   // Ketely Mayara Ferreira dos Santos
+  "agroA_a19": 9,   // Lucas Fernandes Barros dos Santos
+  "agroA_a20": 9,   // Maria Eduarda da Silva Alves
+  "agroA_a21": 1,   // Marina Jesus de Souza
+  "agroA_a22": 5,   // Micaella dos Santos Lima
+  "agroA_a23": 0,   // Nattally Vitória Silva Batista
+  "agroA_a24": 12,  // Pedro Henrique Gomes Lopes
+  "agroA_a25": 2,   // Pyetro Miranda Militão Ferreira
+  "agroA_a26": 7,   // Ruann Carlos Monteiro Andrade
+  "agroA_a27": 5,   // Silvia Roberta Silva de Santana
+  "agroA_a28": 5,   // Thaillan Santos da Silva
+  "agroA_a29": 5,   // Victória dos Santos Ferreira
+  "agroA_a30": 5,   // Xavier Silva Ferreira
 };
 
+// ============================================================
+//  TURMA 1D — P1 Teste-Fra (p1[0], máx 10)
+//  Estrutura P1: Teste-Fra(10) | Teste-Com(20) | Atividade(10) | Teste-Fun(10)
+// ============================================================
+const NOTAS_1D = {
+  "agroD_a0":  9,   // Adenilson Alves da Silva
+  "agroD_a1":  3,   // Amanda Gonçalves da Silva
+  "agroD_a2":  7,   // Ana Clara Santos Vieira
+  "agroD_a3":  3,   // Anna Lorrany Jesus Silva
+  "agroD_a4":  6,   // Breno da Silva Santos
+  "agroD_a5":  5,   // Cristian Jesus de Souza
+  "agroD_a6":  6,   // Daniel de Souza Mota Azevedo
+  "agroD_a7":  4,   // Eduarda Moreira de Andrade
+  "agroD_a8":  5,   // Flavia Oliveira Martins
+  "agroD_a9":  10,  // Gabriel Cerqueira da Silva
+  "agroD_a10": 10,  // Isadora Leal de Carvalho
+  "agroD_a11": 8,   // Julia Santos de Lima
+  "agroD_a12": 1,   // Laís Guirra Ferreira da Silva
+  "agroD_a13": 5,   // Laura Bento de Oliveira
+  "agroD_a14": 10,  // Leonardo de Souza Mota Silva
+  "agroD_a15": 8,   // Marcelo Eduardo dos Santos Bartilotti Filho
+  "agroD_a16": 1,   // Maria Luiza Andrade de Almeida Alves
+  "agroD_a17": 5,   // Michel Santos da Silva
+  "agroD_a18": 2,   // Paulo André Duarte Pinto
+  "agroD_a19": 1,   // Ramon Webster Aquino Macambira
+  "agroD_a20": 3,   // Rebeca Cardoso da Silva
+  "agroD_a21": 10,  // Ruth Gabrielly Ribeiro da Silva
+  "agroD_a22": 2,   // Ryan Alves de Carvalho
+  "agroD_a23": 0,   // Taissa da Silva Souza
+  "agroD_a24": 0,   // Tamara Cristin da Silva Souza
+  "agroD_a25": 5,   // Tayslan Victor Barbosa Silva
+  "agroD_a26": 1,   // Wadson Luciano Costa da Silva
+};
+
+// Estrutura de avaliação correta para 1D (diferente da padrão)
+const CFG_1D = {
+  pontosAprovacao: 60,
+  estrutura: {
+    p1: [
+      { nome: "Teste-Fra", peso: 10 },
+      { nome: "Teste-Com", peso: 20 },
+      { nome: "Atividade", peso: 10 },
+      { nome: "Teste-Fun", peso: 10 },
+    ],
+    p2: [
+      { nome: "Simulado",  peso: 20 },
+      { nome: "Teste",     peso: 20 },
+      { nome: "Projeto",   peso: 10 },
+    ],
+  },
+};
+
+// ============================================================
 const logEl = document.getElementById('log');
 function log(msg, cls) {
   logEl.style.display = 'block';
@@ -89,57 +151,69 @@ function log(msg, cls) {
   logEl.scrollTop = logEl.scrollHeight;
 }
 
-async function inserir() {
-  const btn = document.getElementById('btn');
-  btn.disabled = true;
-  log('🔄 Conectando ao Firebase...', 'info');
+let db = null;
+function getDB() {
+  const cfg = window.FIREBASE_CONFIG;
+  if (!cfg || cfg.projectId === 'PREENCHER') throw new Error('firebase-config.js não configurado.');
+  const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(cfg);
+  db = firebase.firestore(app);
+  return db;
+}
 
+function disableButtons(state) {
+  document.querySelectorAll('button').forEach(b => b.disabled = state);
+}
+
+async function inserirTurma(turma) {
+  disableButtons(true);
+  log(`\n── Turma ${turma} ──────────────────────`, 'sep');
   try {
-    const cfg = window.FIREBASE_CONFIG;
-    if (!cfg || cfg.projectId === 'PREENCHER') {
-      log('❌ firebase-config.js não configurado.', 'err'); return;
-    }
-    const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(cfg);
-    const db  = firebase.firestore(app);
-
-    log('📥 Lendo dados atuais do banco...', 'info');
+    const db = getDB();
     const snap = await db.collection('notas2026').doc('alunos').get();
-
     if (!snap.exists || !snap.data().lista?.length) {
-      log('⚠️  Banco vazio — abra o app principal primeiro (https://notas-alunos2026.netlify.app), aguarde "✓ Salvo na nuvem" e volte aqui.', 'warn');
-      btn.disabled = false;
-      return;
+      log('⚠️  Banco vazio. Abra o app principal, aguarde "✓ Salvo na nuvem" e tente novamente.', 'warn');
+      disableButtons(false); return;
     }
 
     let lista = snap.data().lista;
-    log(`✓ ${lista.length} alunos no banco.`, 'ok');
+    log(`📥 ${lista.length} alunos no banco.`, 'info');
 
-    let atualizados = 0;
+    const notas   = turma === '1A' ? NOTAS_1A : NOTAS_1D;
+    const nCols   = turma === '1A' ? 3 : 4;
+    let count = 0;
+
     lista = lista.map(aluno => {
-      const sim = NOTAS_P1_SIMULADO[aluno.id];
-      if (sim === undefined) return aluno;
-      const p1 = [...(aluno.notas?.p1 || [0, 0, 0])];
-      while (p1.length < 3) p1.push(0);
-      p1[0] = sim;
-      atualizados++;
-      log(`  → ${aluno.nome}: Simulado P1 = ${sim}`, 'info');
+      const val = notas[aluno.id];
+      if (val === undefined) return aluno;
+      const p1 = Array(nCols).fill(0);
+      p1[0] = val;
+      count++;
+      log(`  ${aluno.nome}: p1[0] = ${val}`, 'info');
       return { ...aluno, notas: { ...aluno.notas, p1 } };
     });
 
-    if (atualizados === 0) {
-      log('⚠️  Nenhum aluno da Turma 1A encontrado. Verifique se o app foi aberto e inicializado.', 'warn');
-      btn.disabled = false;
-      return;
-    }
+    if (!count) { log('⚠️  Nenhum aluno encontrado para essa turma.', 'warn'); disableButtons(false); return; }
 
-    log(`\n💾 Salvando ${atualizados} notas...`, 'info');
+    log(`💾 Salvando ${count} alunos...`, 'info');
     await db.collection('notas2026').doc('alunos').set({ lista });
-    log(`\n✅ ${atualizados} notas inseridas com sucesso!`, 'ok');
-    log('🎉 Abra o app principal e confira a Turma 1A.', 'ok');
-  } catch(e) {
-    log('❌ Erro: ' + e.message, 'err');
-    btn.disabled = false;
-  }
+    log(`✅ ${count} notas da Turma ${turma} inseridas!`, 'ok');
+
+    // Atualiza cfg da 1D
+    if (turma === '1D') {
+      const cfgSnap = await db.collection('notas2026').doc('cfg').get();
+      const dados = cfgSnap.exists ? cfgSnap.data().dados : {};
+      dados['agroD'] = CFG_1D;
+      await db.collection('notas2026').doc('cfg').set({ dados });
+      log('✅ Configuração de avaliação da 1D atualizada (4 colunas P1).', 'ok');
+    }
+  } catch(e) { log('❌ Erro: ' + e.message, 'err'); }
+  disableButtons(false);
+}
+
+async function inserirTudo() {
+  await inserirTurma('1A');
+  await inserirTurma('1D');
+  log('\n🎉 Concluído! Abra o app e confira as turmas 1A e 1D.', 'ok');
 }
 </script>
 </body>
