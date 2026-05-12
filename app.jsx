@@ -912,7 +912,9 @@ function Th({ pal, children, rowSpan, colSpan, group, small, sticky, align,
       borderBottom: `2px solid ${pal.line}`, borderRight: `1px solid ${pal.line}`,
       position: sticky ? "sticky" : "static", left: sticky ? 0 : "auto",
       zIndex: sticky ? 3 : 2, top: 0, cursor: onClick ? "pointer" : "default",
-      whiteSpace: "nowrap", letterSpacing: 0.2, textTransform: small ? "none" : "uppercase",
+      whiteSpace: small ? "normal" : "nowrap", verticalAlign: small ? "top" : "middle",
+      minWidth: small ? 80 : "auto",
+      letterSpacing: 0.2, textTransform: small ? "none" : "uppercase",
       ...style,
     }}>
       {children}
@@ -929,6 +931,10 @@ function tdStyle(pal, vPad) {
 }
 
 function AtividadeEditor({ pal, group, item, idx, cfg, setCfg }) {
+  const [editando, setEditando] = useState(false);
+  const [nomeLocal, setNomeLocal] = useState(item.nome);
+  useEffect(() => { setNomeLocal(item.nome); }, [item.nome]);
+
   function update(campo, val) {
     const novo = JSON.parse(JSON.stringify(cfg));
     novo.estrutura[group][idx][campo] = campo === "peso" ? (parseFloat(val) || 0) : val;
@@ -945,19 +951,27 @@ function AtividadeEditor({ pal, group, item, idx, cfg, setCfg }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center",
       gap: 3, position: "relative", padding: "2px 4px" }}>
-      <input value={item.nome}
-        onChange={e => update("nome", e.target.value)}
-        style={{
-          border: "none", background: "transparent", textAlign: "center",
-          fontWeight: 700, fontSize: 11, color: groupColor, width: 78,
-          padding: "2px 4px", borderRadius: 4, outline: "none",
-          textTransform: "uppercase", letterSpacing: 0.3,
-        }}
-        onFocus={e => { e.target.style.background = "white";
-          e.target.style.boxShadow = `0 0 0 2px ${groupColor}40`; }}
-        onBlur={e => { e.target.style.background = "transparent";
-          e.target.style.boxShadow = "none"; }}
-        title="Clique para editar o nome" />
+      {editando ? (
+        <input autoFocus value={nomeLocal}
+          onChange={e => setNomeLocal(e.target.value)}
+          onBlur={() => { update("nome", nomeLocal); setEditando(false); }}
+          onKeyDown={e => { if (e.key === "Enter") e.target.blur(); }}
+          style={{
+            border: `1px solid ${groupColor}60`, background: "white", textAlign: "center",
+            fontWeight: 700, fontSize: 11, color: groupColor, width: 90,
+            padding: "2px 4px", borderRadius: 4, outline: "none",
+            textTransform: "uppercase", letterSpacing: 0.3,
+            boxShadow: `0 0 0 2px ${groupColor}40`,
+          }} />
+      ) : (
+        <div onClick={() => setEditando(true)} title="Clique para editar o nome"
+          style={{
+            fontWeight: 700, fontSize: 11, color: groupColor, width: 90,
+            textAlign: "center", textTransform: "uppercase", letterSpacing: 0.3,
+            wordBreak: "break-word", lineHeight: 1.35, cursor: "text",
+            padding: "2px 4px", borderRadius: 4,
+          }}>{item.nome}</div>
+      )}
       <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
         <input type="number" value={item.peso}
           onChange={e => update("peso", e.target.value)}
