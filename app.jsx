@@ -212,7 +212,7 @@ function seedAlunosFromData(turmaId) {
     id: `${turmaId}_a${i}`,
     turmaId, nome, matricula,
     statusMatricula: "ativo",
-    notas: { p1: [0, 0, 0], p2: [0, 0, 0], paralela: 0 },
+    notas: { s1: { p1: [0,0,0], p2: [0,0,0] }, s2: { p1: [0,0,0], p2: [0,0,0] }, rec: 0 },
   }));
 }
 
@@ -235,33 +235,63 @@ const ESTRUTURA_PADRAO = {
 };
 
 // ---------- HELPERS ----------
+function migrarAluno(aluno) {
+  if (aluno.notas?.s1) return aluno;
+  const p1 = aluno.notas?.p1 || [];
+  const p2 = aluno.notas?.p2 || [];
+  return {
+    ...aluno,
+    notas: {
+      s1: { p1: p1.length ? [...p1] : [0,0,0], p2: p2.length ? [...p2] : [0,0,0] },
+      s2: { p1: Array(p1.length || 3).fill(0), p2: Array(p2.length || 3).fill(0) },
+      rec: 0,
+    },
+  };
+}
+
 function calcularAluno(aluno, cfg) {
-  const p1 = aluno.notas.p1.reduce((s, n) => s + (parseFloat(n) || 0), 0);
-  const p2 = aluno.notas.p2.reduce((s, n) => s + (parseFloat(n) || 0), 0);
-  const semestre = p1 + p2;
-  const paralela = parseFloat(aluno.notas.paralela) || 0;
-  let final = semestre;
-  if (semestre < cfg.pontosAprovacao && paralela > semestre) final = paralela;
-  let status = final >= cfg.pontosAprovacao ? "APROVADO" : "REPROVADO";
+  const notes = aluno.notas || {};
+  const s1n = notes.s1 || { p1: notes.p1 || [], p2: notes.p2 || [] };
+  const s2n = notes.s2 || { p1: [], p2: [] };
+  const s1p1 = (s1n.p1 || []).reduce((s, n) => s + (parseFloat(n) || 0), 0);
+  const s1p2 = (s1n.p2 || []).reduce((s, n) => s + (parseFloat(n) || 0), 0);
+  const semestre1 = s1p1 + s1p2;
+  const s2p1 = (s2n.p1 || []).reduce((s, n) => s + (parseFloat(n) || 0), 0);
+  const s2p2 = (s2n.p2 || []).reduce((s, n) => s + (parseFloat(n) || 0), 0);
+  const semestre2 = s2p1 + s2p2;
+  const mediaFinal = (semestre1 + semestre2) / 2;
+  const rec = parseFloat(notes.rec) || 0;
+  const limAprov = cfg?.pontosAprovacao || 60;
+  const elegibleRec = mediaFinal < limAprov;
+  let final = mediaFinal;
+  if (elegibleRec && rec > 0) final = rec;
+  let status = final >= limAprov ? "APROVADO" : "REPROVADO";
   if (aluno.statusMatricula === "desistente") status = "DESISTENTE";
-  return { p1, p2, semestre, paralela, final, status };
+  return { s1p1, s1p2, semestre1, s2p1, s2p2, semestre2, mediaFinal, rec, final, status, elegibleRec };
 }
 
 function exportCSV(turma, alunos, cfg) {
+  const p1c = cfg.estrutura.p1;
+  const p2c = cfg.estrutura.p2;
   const head = [
     "Matrícula", "Nome",
-    ...cfg.estrutura.p1.map((a, i) => `P1_${a.nome}`),
-    "Total P1",
-    ...cfg.estrutura.p2.map((a, i) => `P2_${a.nome}`),
-    "Total P2", "Semestre", "Paralela", "Final", "Status",
+    ...p1c.map(a => `S1_P1_${a.nome}`), "Total S1-P1",
+    ...p2c.map(a => `S1_P2_${a.nome}`), "Total S1-P2", "Semestre 1",
+    ...p1c.map(a => `S2_P1_${a.nome}`), "Total S2-P1",
+    ...p2c.map(a => `S2_P2_${a.nome}`), "Total S2-P2", "Semestre 2",
+    "Média Final", "Rec", "Final", "Status",
   ];
   const rows = alunos.map(a => {
     const c = calcularAluno(a, cfg);
+    const s1n = a.notas?.s1 || { p1: a.notas?.p1 || [], p2: a.notas?.p2 || [] };
+    const s2n = a.notas?.s2 || { p1: [], p2: [] };
     return [
       a.matricula, a.nome,
-      ...a.notas.p1, c.p1.toFixed(1),
-      ...a.notas.p2, c.p2.toFixed(1),
-      c.semestre.toFixed(1), c.paralela.toFixed(1), c.final.toFixed(1), c.status,
+      ...(s1n.p1 || []), c.s1p1.toFixed(1),
+      ...(s1n.p2 || []), c.s1p2.toFixed(1), c.semestre1.toFixed(1),
+      ...(s2n.p1 || []), c.s2p1.toFixed(1),
+      ...(s2n.p2 || []), c.s2p2.toFixed(1), c.semestre2.toFixed(1),
+      c.mediaFinal.toFixed(1), c.rec.toFixed(1), c.final.toFixed(1), c.status,
     ];
   });
   const csv = [head, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -532,9 +562,10 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [ordem, setOrdem] = useState({ campo: "nome", dir: "asc" });
   const [showImport, setShowImport] = useState(false);
-  const [showMover, setShowMover] = useState(null); // alunoId
+  const [showMover, setShowMover] = useState(null);
   const [showNovo, setShowNovo] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
+  const [semestreAtivo, setSemestreAtivo] = useState("s1");
 
   const calcs = useMemo(() => {
     const map = {};
@@ -542,12 +573,18 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
     return map;
   }, [alunos, cfg]);
 
+  const elegiveisRec = useMemo(() =>
+    alunos.filter(a => calcs[a.id]?.elegibleRec && a.statusMatricula !== "desistente").length,
+  [alunos, calcs]);
+
   const filtrados = useMemo(() => {
     let arr = alunos.filter(a =>
       a.nome.toLowerCase().includes(busca.toLowerCase()) ||
       a.matricula.toLowerCase().includes(busca.toLowerCase())
     );
-    if (filtroStatus !== "todos") {
+    if (semestreAtivo === "rec") {
+      arr = arr.filter(a => calcs[a.id]?.elegibleRec && a.statusMatricula !== "desistente");
+    } else if (filtroStatus !== "todos") {
       arr = arr.filter(a => calcs[a.id]?.status === filtroStatus);
     }
     arr = [...arr].sort((a, b) => {
@@ -561,7 +598,7 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
       return 0;
     });
     return arr;
-  }, [alunos, busca, filtroStatus, ordem, calcs]);
+  }, [alunos, busca, filtroStatus, semestreAtivo, ordem, calcs]);
 
   const stats = useMemo(() => {
     let aprov = 0, reprov = 0, somaF = 0, validos = 0;
@@ -579,20 +616,20 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
   function atualizarNota(id, grupo, idx, valor) {
     setAlunos(prev => prev.map(a => {
       if (a.id !== id) return a;
-      const p1 = [...(a.notas.p1 || [])];
-      const p2 = [...(a.notas.p2 || [])];
-      // pad to match current structure length
-      while (p1.length < cfg.estrutura.p1.length) p1.push(0);
-      while (p2.length < cfg.estrutura.p2.length) p2.push(0);
-      const novo = { ...a, notas: { ...a.notas, p1, p2 } };
-      if (grupo === "paralela") novo.notas.paralela = parseFloat(valor) || 0;
-      else {
-        const max = cfg.estrutura[grupo][idx]?.peso || 0;
-        let n = parseFloat(valor); if (isNaN(n)) n = 0;
-        n = Math.max(0, Math.min(max, n));
-        novo.notas[grupo][idx] = n;
+      const notes = { ...(a.notas || {}) };
+      if (grupo === "rec") {
+        return { ...a, notas: { ...notes, rec: parseFloat(valor) || 0 } };
       }
-      return novo;
+      const semKey = semestreAtivo === "rec" ? "s1" : semestreAtivo;
+      const sNotes = { ...(notes[semKey] || { p1: [], p2: [] }) };
+      const arr = [...(sNotes[grupo] || [])];
+      while (arr.length < cfg.estrutura[grupo].length) arr.push(0);
+      const max = cfg.estrutura[grupo][idx]?.peso || 0;
+      let n = parseFloat(valor); if (isNaN(n)) n = 0;
+      n = Math.max(0, Math.min(max, n));
+      arr[idx] = n;
+      sNotes[grupo] = arr;
+      return { ...a, notas: { ...notes, [semKey]: sNotes } };
     }));
   }
 
@@ -614,6 +651,14 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
   const dRow = density === "compact" ? 6 : 10;
   const dFont = density === "compact" ? 12 : 13;
   const dInput = density === "compact" ? 32 : 38;
+
+  function getNotasSem(aluno) {
+    const notes = aluno.notas || {};
+    if (semestreAtivo === "s1") return notes.s1 || { p1: notes.p1 || [], p2: notes.p2 || [] };
+    return notes[semestreAtivo] || { p1: [], p2: [] };
+  }
+
+  const novoAlunoNotas = { s1: { p1: [0,0,0], p2: [0,0,0] }, s2: { p1: [0,0,0], p2: [0,0,0] }, rec: 0 };
 
   return (
     <div style={{ maxWidth: 1440, margin: "0 auto", padding: "24px 28px 64px" }}>
@@ -649,8 +694,32 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
         <Kpi pal={pal} label="Alunos" value={stats.total} accent={pal.primary} />
         <Kpi pal={pal} label="Aprovados" value={stats.aprov} accent={pal.success} />
         <Kpi pal={pal} label="Reprovados" value={stats.reprov} accent={pal.coral} />
-        <Kpi pal={pal} label="Média da turma" value={stats.media.toFixed(1)} accent={pal.accent} />
+        <Kpi pal={pal} label="Média final" value={stats.media.toFixed(1)} accent={pal.accent} />
         <GraficoDesempenho pal={pal} alunos={alunos} calcs={calcs} cfg={cfg} />
+      </div>
+
+      {/* ── Seletor de semestre ── */}
+      <div style={{ display: "flex", gap: 0, marginBottom: 16, background: pal.surface,
+        borderRadius: 12, padding: 4, width: "fit-content",
+        border: `1px solid ${pal.line}`, boxShadow: "0 2px 6px rgba(0,0,0,0.04)" }}>
+        {[
+          { v: "s1", l: "1º Semestre" },
+          { v: "s2", l: "2º Semestre" },
+          { v: "rec", l: `Recuperação Final${elegiveisRec > 0 ? ` (${elegiveisRec})` : ""}` },
+        ].map(op => (
+          <button key={op.v} onClick={() => setSemestreAtivo(op.v)} style={{
+            padding: "9px 20px", border: "none", borderRadius: 9, cursor: "pointer",
+            background: semestreAtivo === op.v
+              ? (op.v === "rec" ? pal.coralSoft : pal.primarySoft)
+              : "transparent",
+            color: semestreAtivo === op.v
+              ? (op.v === "rec" ? "#B91C1C" : pal.primaryDark)
+              : pal.inkMuted,
+            fontWeight: 700, fontSize: 13,
+            boxShadow: semestreAtivo === op.v ? "0 2px 6px rgba(0,0,0,0.08)" : "none",
+            transition: "all .15s",
+          }}>{op.l}</button>
+        ))}
       </div>
 
       {/* Toolbar tabela */}
@@ -667,141 +736,228 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
             style={{ border: "none", outline: "none", flex: 1, fontSize: 14,
               background: "transparent", color: pal.ink }} />
         </div>
-        <Segmented pal={pal} value={filtroStatus} onChange={setFiltroStatus} options={[
-          { v: "todos", l: "Todos" },
-          { v: "APROVADO", l: "Aprovados" },
-          { v: "REPROVADO", l: "Reprovados" },
-          { v: "DESISTENTE", l: "Desistentes" },
-        ]} />
+        {semestreAtivo !== "rec" && (
+          <Segmented pal={pal} value={filtroStatus} onChange={setFiltroStatus} options={[
+            { v: "todos", l: "Todos" },
+            { v: "APROVADO", l: "Aprovados" },
+            { v: "REPROVADO", l: "Reprovados" },
+            { v: "DESISTENTE", l: "Desistentes" },
+          ]} />
+        )}
         <Btn pal={pal} variant="ghost" onClick={() => setShowNovo(true)}>+ Novo aluno</Btn>
       </div>
 
-      {/* Tabela */}
+      {/* ── Tabela ── */}
       <div style={{
         background: pal.surface, borderRadius: 14, border: `1px solid ${pal.line}`,
         overflow: "auto", boxShadow: "0 4px 14px rgba(15,23,42,0.04)",
       }}>
-        <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%",
-          minWidth: 1100, fontSize: dFont }}>
-          <thead>
-            <tr>
-              <Th pal={pal} rowSpan={2} sticky onClick={() => ordenarPor("nome")}
-                ordem={ordem} campo="nome" align="left" style={{ minWidth: 220 }}>
-                Aluno
-              </Th>
-              <Th pal={pal} colSpan={cfg.estrutura.p1.length} group="p1">
-                <ParcelaHeader pal={pal} group="p1" cfg={cfg} setCfg={setCfg} />
-              </Th>
-              <Th pal={pal} rowSpan={2}>Total P1</Th>
-              <Th pal={pal} colSpan={cfg.estrutura.p2.length} group="p2">
-                <ParcelaHeader pal={pal} group="p2" cfg={cfg} setCfg={setCfg} />
-              </Th>
-              <Th pal={pal} rowSpan={2}>Total P2</Th>
-              <Th pal={pal} rowSpan={2}>Semestre</Th>
-              <Th pal={pal} rowSpan={2}>Paralela</Th>
-              <Th pal={pal} rowSpan={2} onClick={() => ordenarPor("final")}
-                ordem={ordem} campo="final">Final</Th>
-              <Th pal={pal} rowSpan={2} onClick={() => ordenarPor("status")}
-                ordem={ordem} campo="status">Status</Th>
-              <Th pal={pal} rowSpan={2}>Ações</Th>
-            </tr>
-            <tr>
-              {cfg.estrutura.p1.map((it, i) => (
-                <Th key={"p1"+i} pal={pal} group="p1" small>
-                  <AtividadeEditor pal={pal} group="p1" item={it} idx={i}
-                    cfg={cfg} setCfg={setCfg} />
+        {semestreAtivo === "rec" ? (
+          /* Tabela Recuperação Final */
+          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%",
+            minWidth: 750, fontSize: dFont }}>
+            <thead>
+              <tr>
+                <Th pal={pal} sticky onClick={() => ordenarPor("nome")}
+                  ordem={ordem} campo="nome" align="left" style={{ minWidth: 220 }}>Aluno</Th>
+                <Th pal={pal} group="p1">Semestre 1</Th>
+                <Th pal={pal} group="p2">Semestre 2</Th>
+                <Th pal={pal}>Média</Th>
+                <Th pal={pal} style={{ background: pal.coralSoft, color: "#B91C1C" }}>
+                  Rec. Final (máx 100)
                 </Th>
-              ))}
-              {cfg.estrutura.p2.map((it, i) => (
-                <Th key={"p2"+i} pal={pal} group="p2" small>
-                  <AtividadeEditor pal={pal} group="p2" item={it} idx={i}
-                    cfg={cfg} setCfg={setCfg} />
-                </Th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtrados.length === 0 && (
-              <tr><td colSpan={20} style={{ padding: 40, textAlign: "center",
-                color: pal.inkMuted, fontSize: 14 }}>Nenhum aluno encontrado.</td></tr>
-            )}
-            {filtrados.map((aluno, idx) => {
-              const c = calcs[aluno.id];
-              const rowBg = idx % 2 ? pal.bg : pal.surface;
-              return (
-                <tr key={aluno.id}>
-                  <td style={{ ...tdStyle(pal, dRow), textAlign: "left", fontWeight: 600,
-                    position: "sticky", left: 0, background: rowBg, zIndex: 1,
-                    borderRight: `1px solid ${pal.line}` }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: "50%",
-                        background: `linear-gradient(135deg, ${pal.primary}, ${pal.accent})`,
-                        color: "white", display: "grid", placeItems: "center",
-                        fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
-                        {aluno.nome.split(" ").map(n => n[0]).slice(0,2).join("")}
-                      </div>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ color: pal.ink, fontSize: dFont, fontWeight: 600,
-                          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                          maxWidth: 200 }}>{aluno.nome}</div>
-                        <div style={{ color: pal.inkMuted, fontSize: 11, fontWeight: 400 }}>
-                          {aluno.matricula}
+                <Th pal={pal} onClick={() => ordenarPor("final")} ordem={ordem} campo="final">Final</Th>
+                <Th pal={pal} onClick={() => ordenarPor("status")} ordem={ordem} campo="status">Status</Th>
+                <Th pal={pal}>Ações</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtrados.length === 0 && (
+                <tr><td colSpan={8} style={{ padding: 40, textAlign: "center",
+                  color: pal.inkMuted, fontSize: 14 }}>
+                  Nenhum aluno elegível para recuperação. Todos aprovados!
+                </td></tr>
+              )}
+              {filtrados.map((aluno, idx) => {
+                const c = calcs[aluno.id];
+                const rowBg = idx % 2 ? pal.bg : pal.surface;
+                return (
+                  <tr key={aluno.id}>
+                    <td style={{ ...tdStyle(pal, dRow), textAlign: "left", fontWeight: 600,
+                      position: "sticky", left: 0, background: rowBg, zIndex: 1,
+                      borderRight: `1px solid ${pal.line}` }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: "50%",
+                          background: `linear-gradient(135deg, ${pal.coral}, ${pal.accent})`,
+                          color: "white", display: "grid", placeItems: "center",
+                          fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                          {aluno.nome.split(" ").map(n => n[0]).slice(0,2).join("")}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ color: pal.ink, fontSize: dFont, fontWeight: 600,
+                            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                            maxWidth: 200 }}>{aluno.nome}</div>
+                          <div style={{ color: pal.inkMuted, fontSize: 11 }}>{aluno.matricula}</div>
                         </div>
                       </div>
-                    </div>
-                  </td>
-                  {cfg.estrutura.p1.map((it, i) => (
-                    <td key={"p1"+i} style={{ ...tdStyle(pal, dRow), background: rowBg,
-                      backgroundColor: idx % 2 ? "#ECFAF8" : "#F4FCFB" }}>
-                      <NotaInput pal={pal} value={aluno.notas.p1[i] || 0} max={it.peso}
-                        size={dInput}
-                        onChange={v => atualizarNota(aluno.id, "p1", i, v)} />
                     </td>
-                  ))}
-                  <td style={{ ...tdStyle(pal, dRow), background: rowBg, fontWeight: 700 }}>
-                    {c.p1.toFixed(1)}
-                  </td>
-                  {cfg.estrutura.p2.map((it, i) => (
-                    <td key={"p2"+i} style={{ ...tdStyle(pal, dRow), background: rowBg,
-                      backgroundColor: idx % 2 ? "#FAF5FF" : "#FCFAFE" }}>
-                      <NotaInput pal={pal} value={aluno.notas.p2[i] || 0} max={it.peso}
-                        size={dInput}
-                        onChange={v => atualizarNota(aluno.id, "p2", i, v)} />
+                    <td style={{ ...tdStyle(pal, dRow), background: rowBg,
+                      color: pal.primaryDark, fontWeight: 700 }}>{c.semestre1.toFixed(1)}</td>
+                    <td style={{ ...tdStyle(pal, dRow), background: rowBg,
+                      color: "#7E22CE", fontWeight: 700 }}>{c.semestre2.toFixed(1)}</td>
+                    <td style={{ ...tdStyle(pal, dRow), background: rowBg, fontWeight: 700 }}>
+                      {c.mediaFinal.toFixed(1)}
                     </td>
-                  ))}
-                  <td style={{ ...tdStyle(pal, dRow), background: rowBg, fontWeight: 700 }}>
-                    {c.p2.toFixed(1)}
-                  </td>
-                  <td style={{ ...tdStyle(pal, dRow), background: rowBg, fontWeight: 700,
-                    color: pal.primaryDark }}>{c.semestre.toFixed(1)}</td>
-                  <td style={{ ...tdStyle(pal, dRow), background: rowBg }}>
-                    <NotaInput pal={pal} value={aluno.notas.paralela} max={100}
-                      size={dInput}
-                      onChange={v => atualizarNota(aluno.id, "paralela", null, v)} />
-                  </td>
-                  <td style={{ ...tdStyle(pal, dRow), background: rowBg,
-                    fontWeight: 800, fontSize: dFont + 1, color: pal.ink }}>
-                    {c.final.toFixed(1)}
-                  </td>
-                  <td style={{ ...tdStyle(pal, dRow), background: rowBg }}>
-                    <StatusBadge pal={pal} status={c.status} />
-                  </td>
-                  <td style={{ ...tdStyle(pal, dRow), background: rowBg }}>
-                    <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
-                      <IconBtn pal={pal} title="Mover de turma" onClick={() => setShowMover(aluno.id)}>⇄</IconBtn>
-                      <IconBtn pal={pal} title={aluno.statusMatricula === "desistente" ? "Reativar" : "Marcar desistente"}
-                        onClick={() => alternarDesistente(aluno.id)}>
-                        {aluno.statusMatricula === "desistente" ? "↻" : "⊘"}
-                      </IconBtn>
-                      <IconBtn pal={pal} variant="danger" title="Excluir"
-                        onClick={() => removerAluno(aluno.id)}>×</IconBtn>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    <td style={{ ...tdStyle(pal, dRow), background: rowBg,
+                      backgroundColor: idx % 2 ? "#FFF5F5" : "#FFF0F0" }}>
+                      <NotaInput pal={pal} value={aluno.notas?.rec || 0} max={100}
+                        size={dInput} onChange={v => atualizarNota(aluno.id, "rec", null, v)} />
+                    </td>
+                    <td style={{ ...tdStyle(pal, dRow), background: rowBg,
+                      fontWeight: 800, fontSize: dFont + 1, color: pal.ink }}>
+                      {c.final.toFixed(1)}
+                    </td>
+                    <td style={{ ...tdStyle(pal, dRow), background: rowBg }}>
+                      <StatusBadge pal={pal} status={c.status} />
+                    </td>
+                    <td style={{ ...tdStyle(pal, dRow), background: rowBg }}>
+                      <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                        <IconBtn pal={pal} title="Mover de turma" onClick={() => setShowMover(aluno.id)}>⇄</IconBtn>
+                        <IconBtn pal={pal} title={aluno.statusMatricula === "desistente" ? "Reativar" : "Marcar desistente"}
+                          onClick={() => alternarDesistente(aluno.id)}>
+                          {aluno.statusMatricula === "desistente" ? "↻" : "⊘"}
+                        </IconBtn>
+                        <IconBtn pal={pal} variant="danger" title="Excluir"
+                          onClick={() => removerAluno(aluno.id)}>×</IconBtn>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        ) : (
+          /* Tabela S1 / S2 */
+          <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "100%",
+            minWidth: 1100, fontSize: dFont }}>
+            <thead>
+              <tr>
+                <Th pal={pal} rowSpan={2} sticky onClick={() => ordenarPor("nome")}
+                  ordem={ordem} campo="nome" align="left" style={{ minWidth: 220 }}>Aluno</Th>
+                <Th pal={pal} colSpan={cfg.estrutura.p1.length} group="p1">
+                  <ParcelaHeader pal={pal} group="p1" cfg={cfg} setCfg={setCfg} />
+                </Th>
+                <Th pal={pal} rowSpan={2}>Total P1</Th>
+                <Th pal={pal} colSpan={cfg.estrutura.p2.length} group="p2">
+                  <ParcelaHeader pal={pal} group="p2" cfg={cfg} setCfg={setCfg} />
+                </Th>
+                <Th pal={pal} rowSpan={2}>Total P2</Th>
+                <Th pal={pal} rowSpan={2}>
+                  {semestreAtivo === "s1" ? "Semestre 1" : "Semestre 2"}
+                </Th>
+                <Th pal={pal} rowSpan={2} onClick={() => ordenarPor("final")}
+                  ordem={ordem} campo="final">Final</Th>
+                <Th pal={pal} rowSpan={2} onClick={() => ordenarPor("status")}
+                  ordem={ordem} campo="status">Status</Th>
+                <Th pal={pal} rowSpan={2}>Ações</Th>
+              </tr>
+              <tr>
+                {cfg.estrutura.p1.map((it, i) => (
+                  <Th key={"p1"+i} pal={pal} group="p1" small>
+                    <AtividadeEditor pal={pal} group="p1" item={it} idx={i}
+                      cfg={cfg} setCfg={setCfg} />
+                  </Th>
+                ))}
+                {cfg.estrutura.p2.map((it, i) => (
+                  <Th key={"p2"+i} pal={pal} group="p2" small>
+                    <AtividadeEditor pal={pal} group="p2" item={it} idx={i}
+                      cfg={cfg} setCfg={setCfg} />
+                  </Th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtrados.length === 0 && (
+                <tr><td colSpan={20} style={{ padding: 40, textAlign: "center",
+                  color: pal.inkMuted, fontSize: 14 }}>Nenhum aluno encontrado.</td></tr>
+              )}
+              {filtrados.map((aluno, idx) => {
+                const c = calcs[aluno.id];
+                const rowBg = idx % 2 ? pal.bg : pal.surface;
+                const semNotes = getNotasSem(aluno);
+                const totalP1 = semestreAtivo === "s1" ? c.s1p1 : c.s2p1;
+                const totalP2 = semestreAtivo === "s1" ? c.s1p2 : c.s2p2;
+                const semTotal = semestreAtivo === "s1" ? c.semestre1 : c.semestre2;
+                return (
+                  <tr key={aluno.id}>
+                    <td style={{ ...tdStyle(pal, dRow), textAlign: "left", fontWeight: 600,
+                      position: "sticky", left: 0, background: rowBg, zIndex: 1,
+                      borderRight: `1px solid ${pal.line}` }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: "50%",
+                          background: `linear-gradient(135deg, ${pal.primary}, ${pal.accent})`,
+                          color: "white", display: "grid", placeItems: "center",
+                          fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                          {aluno.nome.split(" ").map(n => n[0]).slice(0,2).join("")}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ color: pal.ink, fontSize: dFont, fontWeight: 600,
+                            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                            maxWidth: 200 }}>{aluno.nome}</div>
+                          <div style={{ color: pal.inkMuted, fontSize: 11, fontWeight: 400 }}>
+                            {aluno.matricula}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    {cfg.estrutura.p1.map((it, i) => (
+                      <td key={"p1"+i} style={{ ...tdStyle(pal, dRow), background: rowBg,
+                        backgroundColor: idx % 2 ? "#ECFAF8" : "#F4FCFB" }}>
+                        <NotaInput pal={pal} value={(semNotes.p1 || [])[i] || 0} max={it.peso}
+                          size={dInput}
+                          onChange={v => atualizarNota(aluno.id, "p1", i, v)} />
+                      </td>
+                    ))}
+                    <td style={{ ...tdStyle(pal, dRow), background: rowBg, fontWeight: 700 }}>
+                      {totalP1.toFixed(1)}
+                    </td>
+                    {cfg.estrutura.p2.map((it, i) => (
+                      <td key={"p2"+i} style={{ ...tdStyle(pal, dRow), background: rowBg,
+                        backgroundColor: idx % 2 ? "#FAF5FF" : "#FCFAFE" }}>
+                        <NotaInput pal={pal} value={(semNotes.p2 || [])[i] || 0} max={it.peso}
+                          size={dInput}
+                          onChange={v => atualizarNota(aluno.id, "p2", i, v)} />
+                      </td>
+                    ))}
+                    <td style={{ ...tdStyle(pal, dRow), background: rowBg, fontWeight: 700 }}>
+                      {totalP2.toFixed(1)}
+                    </td>
+                    <td style={{ ...tdStyle(pal, dRow), background: rowBg, fontWeight: 700,
+                      color: pal.primaryDark }}>{semTotal.toFixed(1)}</td>
+                    <td style={{ ...tdStyle(pal, dRow), background: rowBg,
+                      fontWeight: 800, fontSize: dFont + 1, color: pal.ink }}>
+                      {c.final.toFixed(1)}
+                    </td>
+                    <td style={{ ...tdStyle(pal, dRow), background: rowBg }}>
+                      <StatusBadge pal={pal} status={c.status} />
+                    </td>
+                    <td style={{ ...tdStyle(pal, dRow), background: rowBg }}>
+                      <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                        <IconBtn pal={pal} title="Mover de turma" onClick={() => setShowMover(aluno.id)}>⇄</IconBtn>
+                        <IconBtn pal={pal} title={aluno.statusMatricula === "desistente" ? "Reativar" : "Marcar desistente"}
+                          onClick={() => alternarDesistente(aluno.id)}>
+                          {aluno.statusMatricula === "desistente" ? "↻" : "⊘"}
+                        </IconBtn>
+                        <IconBtn pal={pal} variant="danger" title="Excluir"
+                          onClick={() => removerAluno(aluno.id)}>×</IconBtn>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* Modais */}
@@ -813,7 +969,7 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
               id: `${turma.id}_imp_${Date.now()}_${i}`,
               turmaId: turma.id, nome: n.nome, matricula: n.matricula,
               statusMatricula: "ativo",
-              notas: { p1: [0,0,0], p2: [0,0,0], paralela: 0 },
+              notas: { ...novoAlunoNotas },
             })),
           ]);
           setShowImport(false);
@@ -824,7 +980,7 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
           setAlunos(prev => [...prev, {
             id: `${turma.id}_n_${Date.now()}`, turmaId: turma.id, nome, matricula,
             statusMatricula: "ativo",
-            notas: { p1: [0,0,0], p2: [0,0,0], paralela: 0 },
+            notas: { ...novoAlunoNotas },
           }]);
           setShowNovo(false);
         }} />}
@@ -1358,7 +1514,7 @@ function App() {
       ]).then(([aDoc, cDoc]) => {
         const savePromises = [];
         if (aDoc.exists && aDoc.data().lista?.length) {
-          setTodosAlunos(aDoc.data().lista);
+          setTodosAlunos(aDoc.data().lista.map(a => migrarAluno(a)));
         } else {
           // Firebase vazio — salva o seed inicial
           const seed = [];

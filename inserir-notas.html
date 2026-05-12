@@ -203,9 +203,9 @@ function disableButtons(state) {
 }
 
 const TURMA_META = {
-  '1A':  { notas: () => NOTAS_1A,  nCols: 3, cfg: null,    turmaId: null },
-  '1D':  { notas: () => NOTAS_1D,  nCols: 4, cfg: 'agroD', turmaId: 'agroD' },
-  'LCC': { notas: () => NOTAS_LCC, nCols: 3, cfg: 'lcc1',  turmaId: 'lcc1'  },
+  '1A':  { notas: () => NOTAS_1A,  nCols: 3, nColsP2: 3, cfg: null,    turmaId: null },
+  '1D':  { notas: () => NOTAS_1D,  nCols: 4, nColsP2: 3, cfg: 'agroD', turmaId: 'agroD' },
+  'LCC': { notas: () => NOTAS_LCC, nCols: 3, nColsP2: 3, cfg: 'lcc1',  turmaId: 'lcc1'  },
 };
 
 async function inserirTurma(turma) {
@@ -229,16 +229,29 @@ async function inserirTurma(turma) {
       const val = notas[aluno.id];
       if (val === undefined) return aluno;
       count++;
+      const existNotes = aluno.notas || {};
+      const existS2 = existNotes.s2 || null;
       if (typeof val === 'number') {
-        // Apenas p1[0] — formato simples (1A, 1D)
-        const p1 = Array(meta.nCols).fill(0);
+        // Apenas s1.p1[0] — formato simples (1A, 1D)
+        const nP1 = meta.nCols;
+        const nP2 = meta.nColsP2 || meta.nCols;
+        const p1 = Array(nP1).fill(0);
         p1[0] = val;
-        log(`  ${aluno.nome}: p1[0] = ${val}`, 'info');
-        return { ...aluno, notas: { ...aluno.notas, p1 } };
+        const existS1p2 = existNotes.s1?.p2 || existNotes.p2 || Array(nP2).fill(0);
+        log(`  ${aluno.nome}: s1.p1[0] = ${val}`, 'info');
+        return { ...aluno, notas: {
+          s1: { p1, p2: existS1p2 },
+          s2: existS2 || { p1: Array(nP1).fill(0), p2: Array(nP2).fill(0) },
+          rec: existNotes.rec || 0,
+        }};
       } else {
-        // P1 + P2 completos — formato objeto (LCC)
-        log(`  ${aluno.nome}: p1=${JSON.stringify(val.p1)} p2=${JSON.stringify(val.p2)}`, 'info');
-        return { ...aluno, notas: { p1: val.p1, p2: val.p2, paralela: aluno.notas?.paralela || 0 } };
+        // S1 P1 + P2 completos — formato objeto (LCC)
+        log(`  ${aluno.nome}: s1.p1=${JSON.stringify(val.p1)} s1.p2=${JSON.stringify(val.p2)}`, 'info');
+        return { ...aluno, notas: {
+          s1: { p1: val.p1, p2: val.p2 },
+          s2: existS2 || { p1: Array(val.p1.length).fill(0), p2: Array(val.p2.length).fill(0) },
+          rec: existNotes.rec || 0,
+        }};
       }
     });
 
