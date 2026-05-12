@@ -602,6 +602,32 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
   const [showConfig, setShowConfig] = useState(false);
   const [semestreAtivo, setSemestreAtivo] = useState("s1");
 
+  const tableWrapRef = useRef(null);
+  const topScrollRef = useRef(null);
+  const topInnerRef  = useRef(null);
+
+  useEffect(() => {
+    const wrap = tableWrapRef.current;
+    const top  = topScrollRef.current;
+    const inner = topInnerRef.current;
+    if (!wrap || !top || !inner) return;
+    const updateWidth = () => {
+      inner.style.width = wrap.scrollWidth + "px";
+    };
+    updateWidth();
+    const ro = new ResizeObserver(updateWidth);
+    ro.observe(wrap);
+    const onWrap = () => { if (top.scrollLeft !== wrap.scrollLeft) top.scrollLeft = wrap.scrollLeft; };
+    const onTop  = () => { if (wrap.scrollLeft !== top.scrollLeft) wrap.scrollLeft = top.scrollLeft; };
+    wrap.addEventListener("scroll", onWrap);
+    top.addEventListener("scroll", onTop);
+    return () => {
+      ro.disconnect();
+      wrap.removeEventListener("scroll", onWrap);
+      top.removeEventListener("scroll", onTop);
+    };
+  }, [semestreAtivo]);
+
   const calcs = useMemo(() => {
     const map = {};
     alunos.forEach(a => { map[a.id] = calcularAluno(a, cfg); });
@@ -788,8 +814,16 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
         <Btn pal={pal} variant="ghost" onClick={() => setShowNovo(true)}>+ Novo aluno</Btn>
       </div>
 
+      {/* ── Scrollbar superior sincronizada ── */}
+      <div ref={topScrollRef} style={{
+        overflowX: "auto", overflowY: "hidden", height: 14,
+        borderRadius: 7, marginBottom: 4,
+      }}>
+        <div ref={topInnerRef} style={{ height: 1 }} />
+      </div>
+
       {/* ── Tabela ── */}
-      <div style={{
+      <div ref={tableWrapRef} style={{
         background: pal.surface, borderRadius: 14, border: `1px solid ${pal.line}`,
         overflow: "auto", boxShadow: "0 4px 14px rgba(15,23,42,0.04)",
       }}>
