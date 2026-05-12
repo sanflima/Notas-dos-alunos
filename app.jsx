@@ -212,7 +212,7 @@ function seedAlunosFromData(turmaId) {
     id: `${turmaId}_a${i}`,
     turmaId, nome, matricula,
     statusMatricula: "ativo",
-    notas: { s1: { p1: [0,0,0], p2: [0,0,0] }, s2: { p1: [0,0,0], p2: [0,0,0] }, rec: 0 },
+    notas: { s1: { p1: [0,0,0], p2: [0,0,0], rec: 0 }, s2: { p1: [0,0,0], p2: [0,0,0], rec: 0 }, rec: 0 },
   }));
 }
 
@@ -236,14 +236,27 @@ const ESTRUTURA_PADRAO = {
 
 // ---------- HELPERS ----------
 function migrarAluno(aluno) {
-  if (aluno.notas?.s1) return aluno;
-  const p1 = aluno.notas?.p1 || [];
-  const p2 = aluno.notas?.p2 || [];
+  const notes = aluno.notas || {};
+  if (notes.s1) {
+    // já novo formato — garante rec dentro de s1/s2
+    return {
+      ...aluno,
+      notas: {
+        ...notes,
+        s1: { ...notes.s1, rec: notes.s1.rec ?? 0 },
+        s2: notes.s2 ? { ...notes.s2, rec: notes.s2.rec ?? 0 }
+                     : { p1: [], p2: [], rec: 0 },
+        rec: notes.rec ?? 0,
+      },
+    };
+  }
+  const p1 = notes.p1 || [];
+  const p2 = notes.p2 || [];
   return {
     ...aluno,
     notas: {
-      s1: { p1: p1.length ? [...p1] : [0,0,0], p2: p2.length ? [...p2] : [0,0,0] },
-      s2: { p1: Array(p1.length || 3).fill(0), p2: Array(p2.length || 3).fill(0) },
+      s1: { p1: p1.length ? [...p1] : [0,0,0], p2: p2.length ? [...p2] : [0,0,0], rec: 0 },
+      s2: { p1: Array(p1.length || 3).fill(0), p2: Array(p2.length || 3).fill(0), rec: 0 },
       rec: 0,
     },
   };
@@ -255,19 +268,41 @@ function calcularAluno(aluno, cfg) {
   const s2n = notes.s2 || { p1: [], p2: [] };
   const s1p1 = (s1n.p1 || []).reduce((s, n) => s + (parseFloat(n) || 0), 0);
   const s1p2 = (s1n.p2 || []).reduce((s, n) => s + (parseFloat(n) || 0), 0);
-  const semestre1 = s1p1 + s1p2;
+  const semestre1 = s1p1 + s1p2; // score bruto do S1
   const s2p1 = (s2n.p1 || []).reduce((s, n) => s + (parseFloat(n) || 0), 0);
   const s2p2 = (s2n.p2 || []).reduce((s, n) => s + (parseFloat(n) || 0), 0);
-  const semestre2 = s2p1 + s2p2;
-  const mediaFinal = (semestre1 + semestre2) / 2;
-  const rec = parseFloat(notes.rec) || 0;
+  const semestre2 = s2p1 + s2p2; // score bruto do S2
+
+  // Rec. Paralela: prevalece a maior nota (só válida se semestre < 60)
+  const recP1 = parseFloat(s1n.rec) || 0;
+  const recP2 = parseFloat(s2n.rec) || 0;
+  const efS1 = (semestre1 < 60 && recP1 > semestre1) ? recP1 : semestre1;
+  const efS2 = (semestre2 < 60 && recP2 > semestre2) ? recP2 : semestre2;
+
+  // MCC — Média do Componente Curricular (escala 0-100 e 0-10)
+  const mediaFinal = (efS1 + efS2) / 2;
+  const mcc10 = mediaFinal / 10;
+
+  // Rec. Final — NRF inserida em escala 0-10 (padrão IF Baiano)
+  const rec = parseFloat(notes.rec) || 0; // NRF 0-10
   const limAprov = cfg?.pontosAprovacao || 60;
   const elegibleRec = mediaFinal < limAprov;
+
+  // Fórmula IF Baiano: MF = (MCC×6 + NRF×4) / 10
+  let mf10 = mcc10;
   let final = mediaFinal;
-  if (elegibleRec && rec > 0) final = rec;
-  let status = final >= limAprov ? "APROVADO" : "REPROVADO";
+  if (elegibleRec && rec > 0) {
+    mf10 = (mcc10 * 6 + rec * 4) / 10;
+    final = mf10 * 10; // converte para 0-100 para exibição consistente
+  }
+
+  // Aprovação: sem rec → mediaFinal ≥ 60; com rec → MF ≥ 5,0 (= 50 em 0-100)
+  const limFinal = (elegibleRec && rec > 0) ? 50 : limAprov;
+  let status = final >= limFinal ? "APROVADO" : "REPROVADO";
   if (aluno.statusMatricula === "desistente") status = "DESISTENTE";
-  return { s1p1, s1p2, semestre1, s2p1, s2p2, semestre2, mediaFinal, rec, final, status, elegibleRec };
+  return { s1p1, s1p2, semestre1, recP1, efS1,
+           s2p1, s2p2, semestre2, recP2, efS2,
+           mediaFinal, mcc10, rec, mf10, final, status, elegibleRec };
 }
 
 function exportCSV(turma, alunos, cfg) {
@@ -618,10 +653,16 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
       if (a.id !== id) return a;
       const notes = { ...(a.notas || {}) };
       if (grupo === "rec") {
-        return { ...a, notas: { ...notes, rec: parseFloat(valor) || 0 } };
+        // NRF da Recuperação Final — escala 0-10
+        return { ...a, notas: { ...notes, rec: Math.max(0, Math.min(10, parseFloat(valor) || 0)) } };
       }
       const semKey = semestreAtivo === "rec" ? "s1" : semestreAtivo;
       const sNotes = { ...(notes[semKey] || { p1: [], p2: [] }) };
+      if (grupo === "recP") {
+        // Rec. Paralela do semestre — escala 0-100
+        sNotes.rec = Math.max(0, Math.min(100, parseFloat(valor) || 0));
+        return { ...a, notas: { ...notes, [semKey]: sNotes } };
+      }
       const arr = [...(sNotes[grupo] || [])];
       while (arr.length < cfg.estrutura[grupo].length) arr.push(0);
       const max = cfg.estrutura[grupo][idx]?.peso || 0;
@@ -658,7 +699,7 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
     return notes[semestreAtivo] || { p1: [], p2: [] };
   }
 
-  const novoAlunoNotas = { s1: { p1: [0,0,0], p2: [0,0,0] }, s2: { p1: [0,0,0], p2: [0,0,0] }, rec: 0 };
+  const novoAlunoNotas = { s1: { p1: [0,0,0], p2: [0,0,0], rec: 0 }, s2: { p1: [0,0,0], p2: [0,0,0], rec: 0 }, rec: 0 };
 
   return (
     <div style={{ maxWidth: 1440, margin: "0 auto", padding: "24px 28px 64px" }}>
@@ -760,13 +801,19 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
               <tr>
                 <Th pal={pal} sticky onClick={() => ordenarPor("nome")}
                   ordem={ordem} campo="nome" align="left" style={{ minWidth: 220 }}>Aluno</Th>
-                <Th pal={pal} group="p1">Semestre 1</Th>
-                <Th pal={pal} group="p2">Semestre 2</Th>
-                <Th pal={pal}>Média</Th>
-                <Th pal={pal} style={{ background: pal.coralSoft, color: "#B91C1C" }}>
-                  Rec. Final (máx 100)
+                <Th pal={pal} group="p1" style={{ whiteSpace: "normal", minWidth: 68 }}>
+                  S1 efetivo
                 </Th>
-                <Th pal={pal} onClick={() => ordenarPor("final")} ordem={ordem} campo="final">Final</Th>
+                <Th pal={pal} group="p2" style={{ whiteSpace: "normal", minWidth: 68 }}>
+                  S2 efetivo
+                </Th>
+                <Th pal={pal} style={{ whiteSpace: "normal", minWidth: 60 }}>MCC (0-10)</Th>
+                <Th pal={pal} style={{ background: pal.coralSoft, color: "#B91C1C",
+                  whiteSpace: "normal", minWidth: 70 }}>
+                  NRF (0-10)
+                </Th>
+                <Th pal={pal} onClick={() => ordenarPor("final")} ordem={ordem} campo="final"
+                  style={{ whiteSpace: "normal", minWidth: 60 }}>MF (0-10)</Th>
                 <Th pal={pal} onClick={() => ordenarPor("status")} ordem={ordem} campo="status">Status</Th>
                 <Th pal={pal}>Ações</Th>
               </tr>
@@ -802,20 +849,21 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
                       </div>
                     </td>
                     <td style={{ ...tdStyle(pal, dRow), background: rowBg,
-                      color: pal.primaryDark, fontWeight: 700 }}>{c.semestre1.toFixed(1)}</td>
+                      color: pal.primaryDark, fontWeight: 700 }}>{c.efS1.toFixed(1)}</td>
                     <td style={{ ...tdStyle(pal, dRow), background: rowBg,
-                      color: "#7E22CE", fontWeight: 700 }}>{c.semestre2.toFixed(1)}</td>
+                      color: "#7E22CE", fontWeight: 700 }}>{c.efS2.toFixed(1)}</td>
                     <td style={{ ...tdStyle(pal, dRow), background: rowBg, fontWeight: 700 }}>
-                      {c.mediaFinal.toFixed(1)}
+                      {c.mcc10.toFixed(2)}
                     </td>
                     <td style={{ ...tdStyle(pal, dRow), background: rowBg,
                       backgroundColor: idx % 2 ? "#FFF5F5" : "#FFF0F0" }}>
-                      <NotaInput pal={pal} value={aluno.notas?.rec || 0} max={100}
+                      <NotaInput pal={pal} value={aluno.notas?.rec || 0} max={10}
                         size={dInput} onChange={v => atualizarNota(aluno.id, "rec", null, v)} />
                     </td>
                     <td style={{ ...tdStyle(pal, dRow), background: rowBg,
-                      fontWeight: 800, fontSize: dFont + 1, color: pal.ink }}>
-                      {c.final.toFixed(1)}
+                      fontWeight: 800, fontSize: dFont + 1,
+                      color: c.mf10 >= 5 ? pal.success : pal.coral }}>
+                      {c.mf10.toFixed(2)}
                     </td>
                     <td style={{ ...tdStyle(pal, dRow), background: rowBg }}>
                       <StatusBadge pal={pal} status={c.status} />
@@ -855,6 +903,10 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
                 <Th pal={pal} rowSpan={2}>
                   {semestreAtivo === "s1" ? "Semestre 1" : "Semestre 2"}
                 </Th>
+                <Th pal={pal} rowSpan={2} style={{ background: pal.coralSoft, color: "#B91C1C",
+                  whiteSpace: "normal", minWidth: 70 }}>
+                  Rec. Paralela
+                </Th>
                 <Th pal={pal} rowSpan={2} onClick={() => ordenarPor("final")}
                   ordem={ordem} campo="final">Final</Th>
                 <Th pal={pal} rowSpan={2} onClick={() => ordenarPor("status")}
@@ -887,7 +939,10 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
                 const semNotes = getNotasSem(aluno);
                 const totalP1 = semestreAtivo === "s1" ? c.s1p1 : c.s2p1;
                 const totalP2 = semestreAtivo === "s1" ? c.s1p2 : c.s2p2;
-                const semTotal = semestreAtivo === "s1" ? c.semestre1 : c.semestre2;
+                const semRaw  = semestreAtivo === "s1" ? c.semestre1 : c.semestre2;
+                const semTotal = semestreAtivo === "s1" ? c.efS1 : c.efS2; // efetivo após recP
+                const recPVal = semNotes.rec || 0;
+                const eligRecP = semRaw < 60;
                 return (
                   <tr key={aluno.id}>
                     <td style={{ ...tdStyle(pal, dRow), textAlign: "left", fontWeight: 600,
@@ -933,7 +988,25 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
                       {totalP2.toFixed(1)}
                     </td>
                     <td style={{ ...tdStyle(pal, dRow), background: rowBg, fontWeight: 700,
-                      color: pal.primaryDark }}>{semTotal.toFixed(1)}</td>
+                      color: pal.primaryDark }}>
+                      {semRaw.toFixed(1)}
+                      {recPVal > 0 && eligRecP && (
+                        <span style={{ fontSize: 10, color: "#B91C1C", marginLeft: 4 }}>
+                          →{semTotal.toFixed(1)}
+                        </span>
+                      )}
+                    </td>
+                    {/* Rec. Paralela */}
+                    {eligRecP ? (
+                      <td style={{ ...tdStyle(pal, dRow), background: rowBg,
+                        backgroundColor: idx % 2 ? "#FFF5F5" : "#FFF0F0" }}>
+                        <NotaInput pal={pal} value={recPVal} max={100}
+                          size={dInput} onChange={v => atualizarNota(aluno.id, "recP", null, v)} />
+                      </td>
+                    ) : (
+                      <td style={{ ...tdStyle(pal, dRow), background: rowBg,
+                        color: pal.inkSoft, fontSize: 18 }}>—</td>
+                    )}
                     <td style={{ ...tdStyle(pal, dRow), background: rowBg,
                       fontWeight: 800, fontSize: dFont + 1, color: pal.ink }}>
                       {c.final.toFixed(1)}
