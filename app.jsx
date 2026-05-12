@@ -996,17 +996,13 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
                         </span>
                       )}
                     </td>
-                    {/* Rec. Paralela */}
-                    {eligRecP ? (
-                      <td style={{ ...tdStyle(pal, dRow), background: rowBg,
-                        backgroundColor: idx % 2 ? "#FFF5F5" : "#FFF0F0" }}>
-                        <NotaInput pal={pal} value={recPVal} max={100}
-                          size={dInput} onChange={v => atualizarNota(aluno.id, "recP", null, v)} />
-                      </td>
-                    ) : (
-                      <td style={{ ...tdStyle(pal, dRow), background: rowBg,
-                        color: pal.inkSoft, fontSize: 18 }}>—</td>
-                    )}
+                    {/* Rec. Paralela — sempre editável; só conta no cálculo se semRaw < 60 */}
+                    <td style={{ ...tdStyle(pal, dRow), background: rowBg,
+                      backgroundColor: idx % 2 ? "#FFF5F5" : "#FFF0F0",
+                      opacity: eligRecP ? 1 : 0.4 }}>
+                      <NotaInput pal={pal} value={recPVal} max={100}
+                        size={dInput} onChange={v => atualizarNota(aluno.id, "recP", null, v)} />
+                    </td>
                     <td style={{ ...tdStyle(pal, dRow), background: rowBg,
                       fontWeight: 800, fontSize: dFont + 1, color: pal.ink }}>
                       {c.final.toFixed(1)}
