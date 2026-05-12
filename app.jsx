@@ -298,7 +298,7 @@ function Logo({ pal }) {
   );
 }
 
-function TopBar({ pal, view, turma, onHome }) {
+function TopBar({ pal, view, turma, onHome, salvando }) {
   return (
     <div style={{
       background: pal.surface,
@@ -322,7 +322,18 @@ function TopBar({ pal, view, turma, onHome }) {
         )}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{ fontSize: 13, color: pal.inkMuted }}>2025/2 · Senhor do Bonfim</div>
+        {salvando !== null && (
+          <div style={{
+            fontSize: 12, fontWeight: 600,
+            color: salvando ? pal.inkSoft : pal.success,
+            display: "flex", alignItems: "center", gap: 5,
+            transition: "color .4s",
+          }}>
+            <span style={{ fontSize: 14 }}>{salvando ? "⟳" : "✓"}</span>
+            {salvando ? "Salvando…" : "Salvo na nuvem"}
+          </div>
+        )}
+        <div style={{ fontSize: 13, color: pal.inkMuted }}>2026/1 · Senhor do Bonfim</div>
         <div style={{
           width: 36, height: 36, borderRadius: "50%",
           background: `linear-gradient(135deg, ${pal.accent}, ${pal.primary})`,
@@ -1263,7 +1274,12 @@ function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const pal = PALETTES[t.palette] || PALETTES.turquoise;
 
-  const [view, setView] = useState("home"); // home | turma
+  const [carregando, setCarregando] = useState(true);
+  const [salvando, setSalvando] = useState(null); // null = firebase não configurado
+  const dbRef = useRef(null);
+  const saveTimer = useRef(null);
+
+  const [view, setView] = useState("home");
   const [turmaAtivaId, setTurmaAtivaId] = useState(null);
   const [turmas, setTurmas] = useState(TURMAS_SEED);
   const [todosAlunos, setTodosAlunos] = useState(() => {
@@ -1274,6 +1290,66 @@ function App() {
   const [cfgPorTurma, setCfgPorTurma] = useState(() => {
     const o = {}; TURMAS_SEED.forEach(t => o[t.id] = JSON.parse(JSON.stringify(ESTRUTURA_PADRAO))); return o;
   });
+
+  // Inicializa Firebase e carrega dados salvos
+  useEffect(() => {
+    const cfg = window.FIREBASE_CONFIG;
+    if (!cfg || !cfg.projectId || cfg.projectId === "PREENCHER") {
+      setCarregando(false);
+      return;
+    }
+    try {
+      const fbApp = firebase.apps.length ? firebase.app() : firebase.initializeApp(cfg);
+      const db = firebase.firestore(fbApp);
+      dbRef.current = db;
+      Promise.all([
+        db.collection('notas2026').doc('alunos').get(),
+        db.collection('notas2026').doc('cfg').get(),
+      ]).then(([aDoc, cDoc]) => {
+        const savePromises = [];
+        if (aDoc.exists && aDoc.data().lista?.length) {
+          setTodosAlunos(aDoc.data().lista);
+        } else {
+          // Firebase vazio — salva o seed inicial
+          const seed = [];
+          TURMAS_SEED.forEach(t => { seed.push(...seedAlunosFromData(t.id)); });
+          savePromises.push(db.collection('notas2026').doc('alunos').set({ lista: seed }));
+        }
+        if (cDoc.exists && cDoc.data().dados) {
+          setCfgPorTurma(cDoc.data().dados);
+        } else {
+          const seedCfg = {};
+          TURMAS_SEED.forEach(t => seedCfg[t.id] = JSON.parse(JSON.stringify(ESTRUTURA_PADRAO)));
+          savePromises.push(db.collection('notas2026').doc('cfg').set({ dados: seedCfg }));
+        }
+        return Promise.all(savePromises);
+      }).then(() => {
+        setSalvando(false);
+        setCarregando(false);
+      }).catch(() => setCarregando(false));
+    } catch(e) { setCarregando(false); }
+  }, []);
+
+  // Auto-save notas (debounce 1.5s)
+  useEffect(() => {
+    if (!dbRef.current || carregando) return;
+    setSalvando(true);
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      dbRef.current.collection('notas2026').doc('alunos')
+        .set({ lista: todosAlunos })
+        .then(() => setSalvando(false))
+        .catch(() => setSalvando(false));
+    }, 1500);
+  }, [todosAlunos]);
+
+  // Auto-save configurações
+  useEffect(() => {
+    if (!dbRef.current || carregando) return;
+    dbRef.current.collection('notas2026').doc('cfg')
+      .set({ dados: cfgPorTurma })
+      .catch(() => {});
+  }, [cfgPorTurma]);
 
   const turma = turmas.find(x => x.id === turmaAtivaId);
   const alunosTurma = todosAlunos.filter(a => a.turmaId === turmaAtivaId);
@@ -1310,11 +1386,24 @@ function App() {
     setTurmaAtivaId(id); setView("turma");
   }
 
+  if (carregando) return (
+    <div style={{ background: pal.bg, minHeight: "100vh", display: "grid",
+      placeItems: "center", fontFamily: "'Inter', sans-serif" }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>📚</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: pal.ink }}>Carregando notas…</div>
+        <div style={{ fontSize: 14, color: pal.inkMuted, marginTop: 8 }}>
+          Conectando ao banco de dados
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div style={{ background: pal.bg, minHeight: "100vh",
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
       color: pal.ink }}>
-      <TopBar pal={pal} view={view} turma={turma}
+      <TopBar pal={pal} view={view} turma={turma} salvando={salvando}
         onHome={() => { setView("home"); setTurmaAtivaId(null); }} />
 
       {view === "home" && (

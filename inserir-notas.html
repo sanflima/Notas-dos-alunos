@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inserir Notas — IF Baiano 2026/1</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; background: #f0faf9; margin: 0; padding: 32px 20px; }
+    .card { background: white; padding: 32px; border-radius: 16px; max-width: 680px; margin: 0 auto;
+      box-shadow: 0 4px 24px rgba(0,0,0,.08); }
+    h2 { color: #0E8E88; margin: 0 0 8px; }
+    p  { color: #64748b; margin: 0 0 20px; }
+    .turma { background: #f0faf9; border-radius: 10px; padding: 14px 18px; margin-bottom: 12px;
+      border-left: 4px solid #14B8B0; }
+    .turma b { color: #0E8E88; }
+    button { background: #14B8B0; color: white; border: none; padding: 14px 32px; border-radius: 10px;
+      font-size: 15px; font-weight: 700; cursor: pointer; width: 100%; margin-top: 8px; }
+    button:disabled { background: #94a3b8; cursor: not-allowed; }
+    #log { margin-top: 20px; font-family: 'Consolas', monospace; font-size: 13px;
+      background: #0f172a; color: #e2e8f0; padding: 16px; border-radius: 10px;
+      max-height: 360px; overflow-y: auto; display: none; line-height: 1.7; }
+    .ok   { color: #34d399; }
+    .info { color: #93c5fd; }
+    .err  { color: #f87171; }
+    .warn { color: #fbbf24; }
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+</head>
+<body>
+<div class="card">
+  <h2>📥 Inserir Notas — P1 Simulado</h2>
+  <p>Clique no botão para inserir automaticamente as notas do Simulado P1 da Turma 1A no banco de dados Firebase.</p>
+
+  <div class="turma">
+    <b>Turma 1A — Matemática I (Agropecuária)</b><br>
+    <span style="font-size:13px;color:#64748b">31 alunos · P1 Simulado (máx 20 pts)</span>
+  </div>
+
+  <button id="btn" onclick="inserir()">▶ Inserir notas da Turma 1A</button>
+  <div id="log"></div>
+</div>
+
+<script>
+// ============================================================
+//  Notas P1 — Simulado (índice 0 do array p1)
+//  Turma: agroA   IDs gerados como: agroA_a{índice}
+// ============================================================
+const NOTAS_P1_SIMULADO = {
+  "agroA_a0":  8,    // Alyndelon José Freire Lima
+  "agroA_a1":  7,    // Ana Clara Souza Ribeiro
+  "agroA_a2":  1,    // Angelica Pietra Almeida dos Santos
+  "agroA_a3":  0,    // Beatriz Vitoria das Neves da Silva
+  "agroA_a4":  6,    // Clarissa Felix Sousa Ribeiro
+  "agroA_a5":  2,    // Dafni dos Santos Silva
+  "agroA_a6":  2,    // Everton da Silva Souza
+  "agroA_a7":  7,    // Gabrielly Leite Souza
+  "agroA_a8":  8,    // Gemilly da Silva Jesus
+  "agroA_a9":  6,    // Grazyela de Oliveira Souza
+  "agroA_a10": 4,    // Heitor Araujo da Silva Bispo
+  "agroA_a11": 2,    // Isaac Gomes da Silva
+  "agroA_a12": 5,    // Isaac Nilton da Silva Souza
+  "agroA_a13": 4,    // Jenifer Raicca da Silva Miranda
+  "agroA_a14": 7,    // Joseane Fernandes da Silva
+  "agroA_a15": 4,    // José Augusto dos Santos Lira
+  "agroA_a16": 9,    // Kaio Santos da Silva
+  "agroA_a17": 8,    // Kaua Narcizo Silva de Souza
+  "agroA_a18": 4,    // Ketely Mayara Ferreira dos Santos
+  "agroA_a19": 9,    // Lucas Fernandes Barros dos Santos
+  "agroA_a20": 9,    // Maria Eduarda da Silva Alves
+  "agroA_a21": 1,    // Marina Jesus de Souza
+  "agroA_a22": 5,    // Micaella dos Santos Lima
+  "agroA_a23": 0,    // Nattally Vitória Silva Batista
+  "agroA_a24": 12,   // Pedro Henrique Gomes Lopes
+  "agroA_a25": 2,    // Pyetro Miranda Militão Ferreira
+  "agroA_a26": 7,    // Ruann Carlos Monteiro Andrade
+  "agroA_a27": 5,    // Silvia Roberta Silva de Santana
+  "agroA_a28": 5,    // Thaillan Santos da Silva
+  "agroA_a29": 5,    // Victória dos Santos Ferreira
+  "agroA_a30": 5,    // Xavier Silva Ferreira
+};
+
+const logEl = document.getElementById('log');
+function log(msg, cls) {
+  logEl.style.display = 'block';
+  logEl.innerHTML += `<span class="${cls||''}">${msg}</span>\n`;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+async function inserir() {
+  const btn = document.getElementById('btn');
+  btn.disabled = true;
+  log('🔄 Conectando ao Firebase...', 'info');
+
+  try {
+    const cfg = window.FIREBASE_CONFIG;
+    if (!cfg || cfg.projectId === 'PREENCHER') {
+      log('❌ firebase-config.js não configurado.', 'err'); return;
+    }
+    const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(cfg);
+    const db  = firebase.firestore(app);
+
+    log('📥 Lendo dados atuais do banco...', 'info');
+    const snap = await db.collection('notas2026').doc('alunos').get();
+
+    if (!snap.exists || !snap.data().lista?.length) {
+      log('⚠️  Banco vazio — abra o app principal primeiro (https://notas-alunos2026.netlify.app), aguarde "✓ Salvo na nuvem" e volte aqui.', 'warn');
+      btn.disabled = false;
+      return;
+    }
+
+    let lista = snap.data().lista;
+    log(`✓ ${lista.length} alunos no banco.`, 'ok');
+
+    let atualizados = 0;
+    lista = lista.map(aluno => {
+      const sim = NOTAS_P1_SIMULADO[aluno.id];
+      if (sim === undefined) return aluno;
+      const p1 = [...(aluno.notas?.p1 || [0, 0, 0])];
+      while (p1.length < 3) p1.push(0);
+      p1[0] = sim;
+      atualizados++;
+      log(`  → ${aluno.nome}: Simulado P1 = ${sim}`, 'info');
+      return { ...aluno, notas: { ...aluno.notas, p1 } };
+    });
+
+    if (atualizados === 0) {
+      log('⚠️  Nenhum aluno da Turma 1A encontrado. Verifique se o app foi aberto e inicializado.', 'warn');
+      btn.disabled = false;
+      return;
+    }
+
+    log(`\n💾 Salvando ${atualizados} notas...`, 'info');
+    await db.collection('notas2026').doc('alunos').set({ lista });
+    log(`\n✅ ${atualizados} notas inseridas com sucesso!`, 'ok');
+    log('🎉 Abra o app principal e confira a Turma 1A.', 'ok');
+  } catch(e) {
+    log('❌ Erro: ' + e.message, 'err');
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>

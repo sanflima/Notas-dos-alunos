@@ -3,3 +3,6 @@ uploads/
 *.png
 Thumbs.db
 .DS_Store
+# Firebase config NÃO deve ser ignorado — as chaves Firebase são públicas por design.
+# A segurança é controlada pelas Firestore Security Rules no console Firebase.
+# Se quiser proteger, use variáveis de ambiente no Netlify e gere o config dinamicamente.
