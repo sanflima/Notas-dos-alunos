@@ -973,10 +973,13 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
                 const semNotes = getNotasSem(aluno);
                 const totalP1 = semestreAtivo === "s1" ? c.s1p1 : c.s2p1;
                 const totalP2 = semestreAtivo === "s1" ? c.s1p2 : c.s2p2;
-                const semRaw  = semestreAtivo === "s1" ? c.semestre1 : c.semestre2;
+                const semRaw   = semestreAtivo === "s1" ? c.semestre1 : c.semestre2;
                 const semTotal = semestreAtivo === "s1" ? c.efS1 : c.efS2; // efetivo após recP
-                const recPVal = semNotes.rec || 0;
+                const recPVal  = semNotes.rec || 0;
                 const eligRecP = semRaw < 60;
+                const limAprov = cfg?.pontosAprovacao || 60;
+                const semStatus = aluno.statusMatricula === "desistente" ? "DESISTENTE"
+                  : semTotal >= limAprov ? "APROVADO" : "REPROVADO";
                 return (
                   <tr key={aluno.id}>
                     <td style={{ ...tdStyle(pal, dRow), textAlign: "left", fontWeight: 600,
@@ -1038,11 +1041,12 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
                         size={dInput} onChange={v => atualizarNota(aluno.id, "recP", null, v)} />
                     </td>
                     <td style={{ ...tdStyle(pal, dRow), background: rowBg,
-                      fontWeight: 800, fontSize: dFont + 1, color: pal.ink }}>
-                      {c.final.toFixed(1)}
+                      fontWeight: 800, fontSize: dFont + 1,
+                      color: semTotal >= limAprov ? pal.success : pal.coral }}>
+                      {semTotal.toFixed(1)}
                     </td>
                     <td style={{ ...tdStyle(pal, dRow), background: rowBg }}>
-                      <StatusBadge pal={pal} status={c.status} />
+                      <StatusBadge pal={pal} status={semStatus} />
                     </td>
                     <td style={{ ...tdStyle(pal, dRow), background: rowBg }}>
                       <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
