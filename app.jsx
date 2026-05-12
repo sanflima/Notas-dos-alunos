@@ -1307,6 +1307,7 @@ function NotaInput({ pal, value, max, onChange, size }) {
   return (
     <input type="number" min={0} max={max} value={v}
       onChange={e => setV(e.target.value)}
+      onWheel={e => e.target.blur()}
       onBlur={() => onChange(v)}
       style={{
         width: 56, height: size, padding: "0 6px", textAlign: "center",
