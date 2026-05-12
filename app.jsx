@@ -1304,6 +1304,11 @@ function _tdStyleBlocked(pal, vPad) {
 function NotaInput({ pal, value, max, onChange, size }) {
   const [v, setV] = useState(value || "");
   useEffect(() => { setV(value || ""); }, [value]);
+  const num = parseFloat(v) || 0;
+  const pct = max > 0 ? num / max : 0;
+  const noteColor = num === max && max > 0 ? "#1E3A8A"   // azul escuro — nota máxima
+                  : pct < 0.6               ? "#DC2626"   // vermelho — abaixo de 60%
+                  :                           pal.ink;    // normal
   return (
     <input type="number" min={0} max={max} value={v}
       onChange={e => setV(e.target.value)}
@@ -1312,7 +1317,7 @@ function NotaInput({ pal, value, max, onChange, size }) {
       style={{
         width: 56, height: size, padding: "0 6px", textAlign: "center",
         border: `1.5px solid ${pal.line}`, borderRadius: 8, fontSize: 13,
-        fontWeight: 600, color: pal.ink, background: "white",
+        fontWeight: 600, color: noteColor, background: "white",
         outline: "none", transition: "border-color .15s, box-shadow .15s",
       }}
       onFocus={e => { e.target.style.borderColor = pal.primary;
