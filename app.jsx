@@ -181,6 +181,16 @@ const _LEGACY_TURMAS = [
   },
 ];
 
+// Imagens de fundo dos cards (pasta assets/)
+const TURMA_IMGS = {
+  lcc1:  "assets/img1.jpg",
+  adm1:  "assets/img2.jpg",
+  agroA: "assets/img3.jpg",
+  agroB: "assets/img4.jpg",
+  agroC: "assets/img5.jpg",
+  agroD: "assets/img6.jpg",
+};
+
 // Cor visual por card (não muda com a paleta — variedade na tela inicial)
 const CARD_COLORS = {
   turquoise: { bg: "#D6F5F2", ink: "#0E8E88", soft: "#ECFAF8" },
@@ -421,48 +431,74 @@ function HomeTurmas({ pal, turmas, alunosPorTurma, onOpen, onNovaTurma }) {
           const cc = CARD_COLORS[t.cor] || CARD_COLORS.turquoise;
           return (
             <div key={t.id} onClick={() => onOpen(t.id)} style={{
-              background: pal.surface, borderRadius: 16,
-              border: `1px solid ${pal.line}`, overflow: "hidden",
-              cursor: "pointer", transition: "transform .15s, box-shadow .15s",
+              background: pal.surface, borderRadius: 20,
+              border: `2.5px solid ${cc.ink}28`, overflow: "hidden",
+              cursor: "pointer", transition: "transform .18s, box-shadow .18s",
               display: "flex", flexDirection: "column",
+              boxShadow: `0 3px 10px ${cc.ink}18`,
             }}
-              onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)";
-                e.currentTarget.style.boxShadow = "0 12px 24px rgba(15,23,42,0.10)"; }}
+              onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-5px)";
+                e.currentTarget.style.boxShadow = `0 18px 36px ${cc.ink}35`; }}
               onMouseLeave={e => { e.currentTarget.style.transform = "";
-                e.currentTarget.style.boxShadow = ""; }}
+                e.currentTarget.style.boxShadow = `0 3px 10px ${cc.ink}18`; }}
             >
-              <div style={{ height: 96, background: cc.bg, position: "relative", padding: 16,
-                display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-                <div style={{ width: 50, height: 50, borderRadius: 12, background: "white",
-                  display: "grid", placeItems: "center", fontWeight: 800, fontSize: 14,
-                  color: cc.ink, boxShadow: "0 2px 6px rgba(0,0,0,0.06)" }}>{t.icone}</div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                  <div style={{ background: "rgba(255,255,255,0.85)", color: cc.ink,
-                    padding: "3px 9px", borderRadius: 999, fontSize: 10, fontWeight: 700,
-                    letterSpacing: 0.3 }}>
-                    {t.nivel}
-                  </div>
-                  <div style={{ color: cc.ink, fontSize: 10, fontWeight: 600, opacity: 0.85 }}>
-                    {t.codigo}
-                  </div>
+              {/* ── Cabeçalho com imagem de fundo ── */}
+              <div style={{
+                height: 175,
+                background: cc.bg,
+                backgroundImage: TURMA_IMGS[t.id] ? `url('${TURMA_IMGS[t.id]}')` : "none",
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                position: "relative", padding: "18px 18px 14px",
+                display: "flex", alignItems: "flex-end", justifyContent: "space-between",
+              }}>
+                {/* overlay gradiente sobre a foto */}
+                <div style={{
+                  position: "absolute", inset: 0,
+                  background: `linear-gradient(150deg, ${cc.bg}55 0%, ${cc.bg}dd 100%)`,
+                }} />
+                {/* ícone da turma */}
+                <div style={{
+                  width: 80, height: 80, borderRadius: 20,
+                  background: "white",
+                  display: "grid", placeItems: "center",
+                  fontWeight: 900, fontSize: 22, color: cc.ink,
+                  boxShadow: `0 6px 20px rgba(0,0,0,0.22)`,
+                  position: "relative", zIndex: 1, flexShrink: 0,
+                }}>{t.icone}</div>
+                {/* badges direita */}
+                <div style={{ display: "flex", flexDirection: "column",
+                  alignItems: "flex-end", gap: 6, position: "relative", zIndex: 1 }}>
+                  <div style={{
+                    background: "rgba(255,255,255,0.92)", color: cc.ink,
+                    padding: "4px 12px", borderRadius: 999, fontSize: 11, fontWeight: 800,
+                    letterSpacing: 0.4, boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+                  }}>{t.nivel}</div>
+                  <div style={{
+                    background: `${cc.bg}cc`, color: cc.ink,
+                    padding: "3px 11px", borderRadius: 999, fontSize: 12, fontWeight: 700,
+                    backdropFilter: "blur(6px)", border: `1px solid ${cc.ink}22`,
+                  }}>{t.codigo}</div>
                 </div>
               </div>
+
+              {/* ── Corpo do card ── */}
               <div style={{ padding: "16px 18px 16px", flex: 1, display: "flex",
                 flexDirection: "column", gap: 8 }}>
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: cc.ink,
-                    textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: cc.ink,
+                    textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 5 }}>
                     {t.curso}
                   </div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: pal.ink,
-                    letterSpacing: -0.3, marginBottom: 4 }}>{t.nome}</div>
+                  <div style={{ fontSize: 17, fontWeight: 800, color: pal.ink,
+                    letterSpacing: -0.4, marginBottom: 4 }}>{t.nome}</div>
                   <div style={{ fontSize: 12, color: pal.inkMuted }}>
                     {t.turmaCurta} · {t.cargaHoraria}
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: "auto", paddingTop: 10,
-                  borderTop: `1px dashed ${pal.line}` }}>
-                  <Pill label={`${alunos.length} alunos`} bg={pal.bg} fg={pal.inkMuted} />
+                  borderTop: `1.5px dashed ${cc.ink}22` }}>
+                  <Pill label={`${alunos.length} alunos`} bg={cc.soft} fg={cc.ink} />
                   <Pill label={`${aprov} aprov.`} bg={pal.successSoft} fg={pal.success} />
                 </div>
               </div>
