@@ -262,7 +262,8 @@ function migrarAluno(aluno) {
   };
 }
 
-function calcularAluno(aluno, cfg) {
+function calcularAluno(aluno, cfg, opts = {}) {
+  const semestres = opts.semestres || 2; // 1 = curso anual com 1 semestre, 2 = padrão
   const notes = aluno.notas || {};
   const s1n = notes.s1 || { p1: notes.p1 || [], p2: notes.p2 || [] };
   const s2n = notes.s2 || { p1: [], p2: [] };
@@ -279,8 +280,8 @@ function calcularAluno(aluno, cfg) {
   const efS1 = (semestre1 < 60 && recP1 > semestre1) ? recP1 : semestre1;
   const efS2 = (semestre2 < 60 && recP2 > semestre2) ? recP2 : semestre2;
 
-  // MCC — Média do Componente Curricular (escala 0-100 e 0-10)
-  const mediaFinal = (efS1 + efS2) / 2;
+  // MCC — para curso com 1 semestre usa só S1; para 2 semestres usa a média
+  const mediaFinal = semestres === 1 ? efS1 : (efS1 + efS2) / 2;
   const mcc10 = mediaFinal / 10;
 
   // Rec. Final — NRF inserida em escala 0-10 (padrão IF Baiano)
@@ -630,9 +631,10 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
 
   const calcs = useMemo(() => {
     const map = {};
-    alunos.forEach(a => { map[a.id] = calcularAluno(a, cfg); });
+    const opts = { semestres: turma.nivel === "Graduação" ? 1 : 2 };
+    alunos.forEach(a => { map[a.id] = calcularAluno(a, cfg, opts); });
     return map;
-  }, [alunos, cfg]);
+  }, [alunos, cfg, turma.nivel]);
 
   const elegiveisRec = useMemo(() =>
     alunos.filter(a => calcs[a.id]?.elegibleRec && a.statusMatricula !== "desistente").length,
@@ -771,7 +773,7 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
         border: `1px solid ${pal.line}`, boxShadow: "0 2px 6px rgba(0,0,0,0.04)" }}>
         {[
           { v: "s1", l: "1º Semestre" },
-          { v: "s2", l: "2º Semestre" },
+          ...(turma.nivel === "Graduação" ? [] : [{ v: "s2", l: "2º Semestre" }]),
           { v: "rec", l: `Recuperação Final${elegiveisRec > 0 ? ` (${elegiveisRec})` : ""}` },
         ].map(op => (
           <button key={op.v} onClick={() => setSemestreAtivo(op.v)} style={{
@@ -838,9 +840,11 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
                 <Th pal={pal} group="p1" style={{ whiteSpace: "normal", minWidth: 68 }}>
                   S1 efetivo
                 </Th>
-                <Th pal={pal} group="p2" style={{ whiteSpace: "normal", minWidth: 68 }}>
-                  S2 efetivo
-                </Th>
+                {turma.nivel !== "Graduação" && (
+                  <Th pal={pal} group="p2" style={{ whiteSpace: "normal", minWidth: 68 }}>
+                    S2 efetivo
+                  </Th>
+                )}
                 <Th pal={pal} style={{ whiteSpace: "normal", minWidth: 60 }}>MCC (0-10)</Th>
                 <Th pal={pal} style={{ background: pal.coralSoft, color: "#B91C1C",
                   whiteSpace: "normal", minWidth: 70 }}>
@@ -884,8 +888,10 @@ function TurmaView({ pal, turma, alunos, setAlunos, cfg, setCfg, density,
                     </td>
                     <td style={{ ...tdStyle(pal, dRow), background: rowBg,
                       color: pal.primaryDark, fontWeight: 700 }}>{c.efS1.toFixed(1)}</td>
-                    <td style={{ ...tdStyle(pal, dRow), background: rowBg,
-                      color: "#7E22CE", fontWeight: 700 }}>{c.efS2.toFixed(1)}</td>
+                    {turma.nivel !== "Graduação" && (
+                      <td style={{ ...tdStyle(pal, dRow), background: rowBg,
+                        color: "#7E22CE", fontWeight: 700 }}>{c.efS2.toFixed(1)}</td>
+                    )}
                     <td style={{ ...tdStyle(pal, dRow), background: rowBg, fontWeight: 700 }}>
                       {c.mcc10.toFixed(2)}
                     </td>
